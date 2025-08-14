@@ -1,0 +1,11 @@
+input_glob: "input/**/*.jpg"
+output_dir: "output"
+mtf_mapper:
+  executable: "mtf_mapper"   # or full path to mtf_mapper.exe
+  csv_ext: ".csv"
+  overlay: true
+  extra_flags: []             # put your real flags here
+camera:
+  pixel_size_um: 4.63
+  focal_length_mm: 35.0
+  gamma: 2.2

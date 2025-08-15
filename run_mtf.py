@@ -1,4 +1,4 @@
-# run_mtf.py — double-click friendly runner for mtf_plus
+# run_mtf.py — double-click friendly runner for mtf_plus (package-aware)
 
 # ---------- CONFIG ----------
 INPUT = r"C:\PHYS3810\slant_edge_japan_best_192"   # folder of PNGs OR a single PNG file
@@ -13,16 +13,15 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 SRC = HERE / "src"
-sys.path.insert(0, str(SRC))       # so we can "import mtf_plus" from src/
+sys.path.insert(0, str(SRC))   # so Python can see both 'mtf_batch' and 'third_party'
 
+# Try both import styles:
 try:
+    # layout where mtf_plus.py sits directly in src\
     import mtf_plus as mp
-except Exception as e:
-    print("\n[ERROR] Could not import 'mtf_plus' from", SRC)
-    print("Make sure mtf_plus.py is in src/, and third_party/mtf.py is src/third_party/ if required.")
-    print("Original error:", repr(e))
-    input("\nPress Enter to exit...")
-    raise SystemExit(1)
+except Exception:
+    # your current layout: src\mtf_batch\mtf_plus.py
+    from mtf_batch import mtf_plus as mp
 
 def main():
     ipath = Path(INPUT)

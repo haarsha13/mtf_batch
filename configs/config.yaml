@@ -1,4 +1,4 @@
-input_dir: "C:/PHYS3810/slant_edge_japan_best_192"
+input_dir: G:\My Drive\MTF_mapper\slant_edge_japan_best_192\your_patch.png
 input_glob: "**/patch*.png"
 output_dir: "mtf_outputs"
 

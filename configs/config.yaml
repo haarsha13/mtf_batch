@@ -1,11 +1,7 @@
-input_glob: "input/**/*.jpg"
-output_dir: "output"
-mtf_mapper:
-  executable: "mtf_mapper"   # or full path to mtf_mapper.exe
-  csv_ext: ".csv"
-  overlay: true
-  extra_flags: []             # put your real flags here
-camera:
-  pixel_size_um: 4.63
-  focal_length_mm: 35.0
-  gamma: 2.2
+input_dir: "C:/PHYS3810/slant_edge_japan_best_192"
+input_glob: "**/patch*.png"
+output_dir: "mtf_outputs"
+
+pixel_pitch_um: 4.6   # set if you want lp/mm
+gamma: null           # e.g., 2.2 to approx linearise JPEGs
+save_plots: true

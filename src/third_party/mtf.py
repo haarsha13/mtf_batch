@@ -425,7 +425,7 @@ class MTF:
         sz = np.size(res[0])
         
         distances = esf.x[indexes]
-        values = np.zeros(sz, dtype=np.float)
+        values = np.zeros(sz, dtype=float)
         
         for x in range(sz):
             values[x] = np.sum(esf.y[indexes[x]:indexes[x]+counts[x]])/counts[x]
@@ -581,4 +581,5 @@ class MTF:
             plt.show(block=False)
             plt.show()
 
-        return cMTF(x, y, mtf.mtfAtNyquist, esf.width)
+        return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
+

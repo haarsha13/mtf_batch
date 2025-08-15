@@ -1,7 +1,8 @@
-input_dir: G:\My Drive\MTF_mapper\slant_edge_japan_best_192\your_patch.png
-input_glob: "**/patch*.png"
+input_dir: "G:/My Drive/MTF_mapper/slant_edge_japan_best_192"
+input_glob: "**/patch*.png"   # or simply "**/*.png"
 output_dir: "mtf_outputs"
 
-pixel_pitch_um: 4.6   # set if you want lp/mm
-gamma: null           # e.g., 2.2 to approx linearise JPEGs
+pixel_pitch_um: 4.6
+gamma: null
 save_plots: true
+

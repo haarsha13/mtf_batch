@@ -1,4 +1,4 @@
-rom mtf_batch.mtf_plus import calculate_from_path
+from mtf_batch.mtf_plus import calculate_from_path
 import matplotlib.pyplot as plt
 from pathlib import Path
 

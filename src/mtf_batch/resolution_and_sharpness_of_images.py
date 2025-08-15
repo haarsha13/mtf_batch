@@ -250,8 +250,8 @@ class MTF:
     distances = ESF.x[indexes]
     values = np.zeros(sz, dtype=np.float64)
 
-    for x in range(sz):
-        values[x] = np.sum(ESF.y[indexes[x]:indexes[x]+counts[x]])/counts[x]
+    for i in range(sz):
+        values[i] = np.sum(ESF.y[indexes[i]:indexes[i]+counts[i]])/counts[i]
 
     if (verbose == Verbosity.BRIEF):
         print("ESF Simplification [done] (Size from {0:d} to {1:d})".format(np.size(ESF.x), np.size(distances)))
@@ -317,95 +317,61 @@ class MTF:
   @staticmethod
   def MTF_Full(imgArr, verbose=Verbosity.NONE):
     imgArr = Transform.Orientify(imgArr)
-    esf = MTF.GetESF_crop(imgArr, Verbosity.NONE)
-    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
-    mtf = MTF.GetMTF(lsf, Verbosity.NONE)
+    esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
+    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
+    mtf = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
 
-    if (verbose == Verbosity.BRIEF):
-      print(f"MTF at Nyquist:{0:0.2f}%, Transition Width:{1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
+    if (verbose == Verbosity.DETAIL):
+        plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
+        x = [0, np.size(imgArr,1)-1]
+        y = np.polyval(esf.edgePoly, x)
 
-    elif (verbose == Verbosity.DETAIL):
-      x = [0, np.size(imgArr,1)-1]
-      y = np.polyval(esf.edgePoly, x)
+        gs = plt.GridSpec(3, 2)
+        ax1 = plt.subplot(gs[0, 0])
+        ax2 = plt.subplot(gs[1, 0])
+        ax3 = plt.subplot(gs[2, 0])
+        ax4 = plt.subplot(gs[:, 1])
 
-      fig = pylab.gcf()
-      fig.canvas.manager.set_window_title('MTF Analysis')
-      gs = fig.add_gridspec(3,2)
-      ax1 = fig.add_subplot(gs[0, 0])
-      ax2 = fig.add_subplot(gs[1, 0])
-      ax3 = fig.add_subplot(gs[2, 0])
-      ax4 = fig.add_subplot(gs[:, 1])
+        ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
+        ax1.plot(x, y, color='red')
+        ax1.axis('off')
+        ax2.plot(esf.rawESF.x, esf.rawESF.y,
+                 esf.interpESF.x, esf.interpESF.y)
+        top = np.max(esf.rawESF.y)-esf.threshold
+        bot = np.min(esf.rawESF.y)+esf.threshold
+        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
+        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
+        ax2.xaxis.set_visible(True)
+        ax2.yaxis.set_visible(True)
+        ax3.plot(lsf.x, lsf.y)
+        ax3.xaxis.set_visible(True)
+        ax3.yaxis.set_visible(True)
+        ax4.plot(mtf.x, mtf.y)
+        ax4.set_title(f"MTF at Nyquist:{mtf.mtfAtNyquist:0.2f}%\nTransition Width:{esf.width:0.2f}")
+        ax4.grid(True)
 
-      ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
-      ax1.plot(x, y, color='red')
-      ax1.axis('off')
-      ax2.plot(esf.rawESF.x, esf.rawESF.y,
-               esf.interpESF.x, esf.interpESF.y)
-      top = np.max(esf.rawESF.y)-esf.threshold
-      bot = np.min(esf.rawESF.y)+esf.threshold
-      ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
-      ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
-      ax2.xaxis.set_visible(False)
-      ax2.yaxis.set_visible(False)
-      ax3.plot(lsf.x, lsf.y)
-      ax3.xaxis.set_visible(False)
-      ax3.yaxis.set_visible(False)
-      ax4.plot(mtf.x, mtf.y)
-      ax4.set_title("MTF at Nyquist:{0:0.2f}%\nTransition Width:{1:0.2f}".format(mtf.mtfAtNyquist, esf.width))
-      ax4.grid(True)
-
-      plt.show(block=False)
-      plt.show()
-
+        plt.tight_layout()
+        plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
-import os
-from os import path
-from google.colab import drive
+#import os
+#from os import path
+#from google.colab import drive
 
-drive.mount('/content/drive/', force_remount=False)
+#drive.mount('/content/drive/', force_remount=False)
 
 # Main working directory.
-images_folder = "slant_edge_japan_best"
-dir = '/content/drive/My Drive/slant_edges/'
-os.chdir(dir + images_folder)
-print("Currently working in" + dir + images_folder)
+#images_folder = "slant_edge_japan_best"
+#dir = '/content/drive/My Drive/slant_edges/'
+#os.chdir(dir + images_folder)
+#print("Currently working in" + dir + images_folder)
+
+"""
+import images with own directory
+"""
 
 img = Transform.LoadImg("patchX1182Y3973_depth-600um.png")
 
 imgArr = Transform.Arrayify(img)
 
 res = MTF.MTF_Full(imgArr, verbose=Verbosity.DETAIL)
-
-ESF_crop_data = MTF.GetESF_crop(img_arr) #Arr
-# returns cESF(esfRaw, esfInterp, threshold, width, angle, edgePoly)
-
-ESF_data = MTF.GetESF(img_arr, ESF_crop_data.edgePoly) #Arr, edgePoly
-# returns cSet(distances, values)
-
-ESF_simplify_data = MTF.Simplify_ESF(ESF_data) #ESF
-# returns cSet(distances, values)
-
-LSF_data = MTF.GetLSF(ESF_simplify_data)
-
-MTF_data = MTF.GetMTF(LSF_data)
-print(MTF_data.mtfAtNyquist)
-
-#MTF_calc = MTF.MTF_Full(img_arr)
-
-MTF.crop(a, b, 0, 160) #values, distances, head, tail
-# returns cSet(distances[h:t], values[h:t])
-
-
-
-
-
-
-MTF.GetLSF(d) #ESF
-# returns cSet(lsfDistances, lsfValues)
-
-MTF.GetMTF(e) #LSF
-# returns cMTF(interpDistances, interpValues, valueAtNyquist, -1.0)
-
-MTF.MTF_Full(f) #ImgArr
-# returns cMTF(x, y, mtf.mtfAtNyquist, esf.width)

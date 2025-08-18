@@ -354,24 +354,27 @@ class MTF:
         plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
-#import os
-#from os import path
-#from google.colab import drive
-
-#drive.mount('/content/drive/', force_remount=False)
+import os
 
 # Main working directory.
-#images_folder = "slant_edge_japan_best"
-#dir = '/content/drive/My Drive/slant_edges/'
-#os.chdir(dir + images_folder)
-#print("Currently working in" + dir + images_folder)
+images_folder = "\\slant_edge_japan_best_192"
+dir = "C:\\Users\\howef\\OneDrive\\Desktop\\Slant_MTF_TEST"
+os.chdir(dir + images_folder)
+print("Currently working in" + dir + images_folder)
 
-"""
-import images with own directory
-"""
+# Image processing for all in folder that ends with .png
+for i in os.listdir():
+  if i.endswith(".png"):
+    print("Processing image: " + i)
+    filename=i.replace('.png', '_mtf.png')
+    img = Transform.LoadImg(i)
+    imgArr = Transform.Arrayify(img)
+    res = MTF.MTF_Full(imgArr, verbose=Verbosity.DETAIL)
+    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    plt.close('all')
 
-img = Transform.LoadImg("patchX1182Y3973_depth-600um.png")
+# Saves all as an image with the same name as the original but with _mtf.png appended isntead of .png
+# These also each are analyzed and saved in order of the original images, and in the same folder as the original images.
 
-imgArr = Transform.Arrayify(img)
+print("All saved in current working directory: " + os.getcwd())
 
-res = MTF.MTF_Full(imgArr, verbose=Verbosity.DETAIL)

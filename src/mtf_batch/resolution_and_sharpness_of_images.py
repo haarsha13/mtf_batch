@@ -357,8 +357,8 @@ class MTF:
 import os
 
 # Main working directory.
-images_folder = "\\slant_edge_japan_best_192"
-dir = "C:\\Users\\howef\\OneDrive\\Desktop\\Slant_MTF_TEST"
+images_folder = "\\Your own image folder name"
+dir = "Your own directory"
 os.chdir(dir + images_folder)
 print("Currently working in" + dir + images_folder)
 
@@ -373,7 +373,7 @@ for i in os.listdir():
     plt.savefig(filename, bbox_inches='tight', dpi=300)
     plt.close('all')
 
-# Saves all as an image with the same name as the original but with _mtf.png appended isntead of .png
+# Saves all as an image with the same name as the original but with _mtf.png appended instead of .png
 # These also each are analyzed and saved in order of the original images, and in the same folder as the original images.
 
 print("All saved in current working directory: " + os.getcwd())

@@ -387,7 +387,7 @@ print("Currently working in" + dir + images_folder)
 for i in os.listdir():
   if i.endswith(".png"):
     print("Processing image: " + i)
-    fraction = #your desired MTF. e.g. 0.5 for MTF50
+    fraction = 0.5 #your desired MTF. e.g. 0.5 for MTF50
     filename=i.replace('.png', '_mtf.png')
     img = Transform.LoadImg(i)
     imgArr = Transform.Arrayify(img)

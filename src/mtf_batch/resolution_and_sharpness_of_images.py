@@ -23,6 +23,7 @@ from scipy import interpolate
 from scipy.fft import fft
 from enum import Enum
 from dataclasses import dataclass
+from pathlib import Path
 
 @dataclass
 class cSet:
@@ -372,6 +373,14 @@ class MTF:
         ax4.minorticks_on()
 
         plt.tight_layout()
+
+        # Optional save to outputs/plots (or custom dir)
+        if save_dir is not None:
+            _out = Path(save_dir)
+            _out.mkdir(parents=True, exist_ok=True)
+            _stem = (filename or "mtf_output").rsplit('.', 1)[0]
+            plt.savefig(_out / f"{_stem}_mtf.png", bbox_inches='tight', dpi=300)
+
         plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
@@ -387,7 +396,7 @@ class MTF:
 # for i in os.listdir():
 #   if i.endswith(".png"):
 #     print("Processing image: " + i)
-#     fraction = 0.5 #your desired MTF. e.g. 0.5 for MTF50
+#     fraction = #your desired MTF. e.g. 0.5 for MTF50
 #     filename=i.replace('.png', '_mtf.png')
 #     img = Transform.LoadImg(i)
 #     imgArr = Transform.Arrayify(img)
@@ -399,4 +408,6 @@ class MTF:
 # # These also each are analyzed and saved in order of the original images, and in the same folder as the original images.
 
 # print("All saved in current working directory: " + os.getcwd())
+
+
 

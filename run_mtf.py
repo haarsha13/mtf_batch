@@ -4,7 +4,7 @@
 INPUT = r"C:\PHYS3810\slant_edge_japan_best_192"   # folder or single PNG
 OUT_DIR = r"C:\code\mtf_batch\outputs"             # or None
 PATTERN = "*.png"
-MODULE_PATH = r"C:\full\path\to\resolution_and_sharpness_of_images.py"
+MODULE_PATH = r"C:\Users\HAARSHA KRISHNA\OneDrive\Documents\GitHub\mtf_batch\src\mtf_batch\resolution_and_sharpness_of_images.py"
 # -------- END CONFIG --------
 
 import sys

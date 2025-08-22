@@ -439,14 +439,6 @@ class MTF:
         ax4.text(0.62, 0.75, info, transform=ax4.transAxes, ha='left', va='top')
 
         plt.tight_layout()
-
-        # Optional save to outputs/plots (or custom dir)
-        if save_dir is not None:
-            _out = Path(save_dir)
-            _out.mkdir(parents=True, exist_ok=True)
-            _stem = (filename or "mtf_output").rsplit('.', 1)[0]
-            plt.savefig(_out / f"{_stem}_mtf.png", bbox_inches='tight', dpi=300)
-
         plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
       

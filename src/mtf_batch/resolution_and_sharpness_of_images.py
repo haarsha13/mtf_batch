@@ -417,8 +417,8 @@ class MTF:
 
             gs = plt.GridSpec(3, 2, width_ratios=[1.1, 1.4])
             ax1 = plt.subplot(gs[0, 0])   # ROI
-            ax2 = plt.subplot(gs[1, 0])   # Edge profile (ESF)
-            ax3 = plt.subplot(gs[2, 0])   # LSF
+            ax2 = plt.subplot(gs[1:2,0])   # Edge profile (ESF)
+            #ax3 = plt.subplot(gs[2, 0])   # LSF
             ax4 = plt.subplot(gs[:, 1])   # MTF + info panel
 
             # Subplot: ROI/Image with detected edge overlay
@@ -434,20 +434,23 @@ class MTF:
             bot = np.min(esf.rawESF.y) + esf.threshold
             ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
             ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
-            ax2.set_title(f"Edge profile: {edge_profile_label}")
+            # ax2.set_title(f"Edge profile: {edge_profile_label}")
             ax2.set_xlabel("Distance (pixels)")
             ax2.set_ylabel("Edge profile (linear)")
             ax2.grid(True, alpha=0.3)
             ax2.legend(loc="lower right", fontsize=8)
             ax2.minorticks_on()
 
-            # Subplot: LSF
-            ax3.plot(lsf.x, lsf.y)
-            ax3.set_xlabel("Distance (pixels)")
-            ax3.set_ylabel("LSF (normalized)")
-            ax3.grid(True, alpha=0.3)
-            ax3.minorticks_on()
-
+            # # Subplot: LSF
+            # ax3.plot(lsf.x, lsf.y)
+            # ax3.set_xlabel("Distance (pixels)")
+            # ax3.set_ylabel("LSF (normalized)")
+            # ax3.grid(True, alpha=0.3)
+            # ax3.minorticks_on()
+            
+            # Orientation + contrast + dims info
+            contrast = _michelson_contrast01(imgArr)
+            
             # Subplot: MTF with Nyquist line + info box
             ax4.plot(mtf.x, mtf.y)
             cutoff_txt = f"{cutoff_freq:0.2f}" if cutoff_freq is not None else "N/A"
@@ -455,25 +458,17 @@ class MTF:
             ax4.plot(0.5, mtf.mtfAtNyquist/100.0, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
             if cutoff_freq is not None:
                 ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{int(fraction*100)} Frequency', ms=3)
-            ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.2f}°", ha='left', va='top', transform=ax4.transAxes)
-            ax4.text(0.5, 0.94, f"Width: {esf.width:0.2f} px", ha='left', va='top', transform=ax4.transAxes)
-            ax4.text(0.5, 0.89, f"Threshold: {esf.threshold:0.2f}", ha='left', va='top', transform=ax4.transAxes)
+            ax4.text(0.5, 0.99,  f"Original edge angle: {orig_angle:.2f}°", ha='left', va='top', transform=ax4.transAxes)
+            ax4.text(0.5, 0.94,   f"Normalized edge angle: {esf.angle:.2f}°", ha='left', va='top', transform=ax4.transAxes)
+            ax4.text(0.5, 0.90, f"Width: {esf.width:0.2f} px", ha='left', va='top', transform=ax4.transAxes)
+            ax4.text(0.5, 0.85, f"Threshold: {esf.threshold:0.2f}", ha='left', va='top', transform=ax4.transAxes)
+            ax4.text(0.5, 0.80, f"Chart contrast: {contrast*100:.1f}%", ha='left', va='top', transform=ax4.transAxes)
             ax4.set_xlabel('Normalized Frequency')
             ax4.set_ylabel('MTF Value')
             ax4.minorticks_on()
 
-            # Orientation + contrast + dims info
-            contrast = _michelson_contrast01(imgArr)
-            info = (
-                f"Original edge angle: {orig_angle:.2f}°\n"
-                f"Normalized edge angle: {esf.angle:.2f}°\n"
-                f"Est. chart contrast: {contrast*100:.1f}%\n"
-                f"Image width: {W} px\n"
-                f"Image height: {H} px\n"
-                f"Transition width: {esf.width:.2f} px\n"
-                f"Threshold: {esf.threshold:.2f}"
-            )
-            ax4.text(0.62, 0.75, info, transform=ax4.transAxes, ha='left', va='top')
+         
+            
 
             plt.tight_layout()
             plt.show()
@@ -525,5 +520,6 @@ def _raw_edge_angle_deg(arr01):
 #         plt.close('all')
 #
 # print("Done.")
+
 
 

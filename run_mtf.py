@@ -1,5 +1,3 @@
-# run_mtf.py — runner for resolution_and_sharpness_of_images.py
-
 # ---------- CONFIG ----------
 INPUT = r"C:\PHYS3810\slant_edge_japan_best_192"   # folder or single PNG
 OUT_DIR = r"C:\code\mtf_batch\outputs"             # or None

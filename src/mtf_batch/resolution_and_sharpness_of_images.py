@@ -291,7 +291,7 @@ class MTF:
     return cSet(lsfDistances, lsfValues)
 
   @staticmethod
-  def GetMTF(LSF, verbose = Verbosity.NONE):
+  def GetMTF(LSF, fraction, verbose = Verbosity.NONE):
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
     values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
@@ -302,6 +302,13 @@ class MTF:
     interpValues = interp(interpDistances)
     valueAtNyquist = interpValues[25]*100
 
+    target = fraction
+    crossing_idx = np.where(interpValues <= target)[0]
+    if len(crossing_idx) > 0:
+        cutoff_freq = interpDistances[crossing_idx[0]]
+    else:
+        cutoff_freq = None
+    
     if (verbose == Verbosity.BRIEF):
       print(f"MTF [done]")
 
@@ -312,14 +319,14 @@ class MTF:
       ax1.plot(interpDistances, interpValues)
       plt.show(block = False)
       plt.show()
-    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0)
+    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq
 
   @staticmethod
-  def MTF_Full(imgArr, verbose=Verbosity.NONE):
+  def MTF_Full(imgArr, fraction, verbose=Verbosity.NONE):
     imgArr = Transform.Orientify(imgArr)
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
+    mtf, cutoff_freq = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
 
     if (verbose == Verbosity.DETAIL):
         plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
@@ -335,6 +342,7 @@ class MTF:
         ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
         ax1.plot(x, y, color='red')
         ax1.axis('off')
+        ax1.set_title(f"Original Image\nDimensions: {w} by {h}")
         ax2.plot(esf.rawESF.x, esf.rawESF.y,
                  esf.interpESF.x, esf.interpESF.y)
         top = np.max(esf.rawESF.y)-esf.threshold
@@ -343,12 +351,25 @@ class MTF:
         ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
         ax2.xaxis.set_visible(True)
         ax2.yaxis.set_visible(True)
+        ax2.grid(True)
+        ax2.minorticks_on()
+
         ax3.plot(lsf.x, lsf.y)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
+        ax3.grid(True)
+        ax3.minorticks_on()
+
         ax4.plot(mtf.x, mtf.y)
-        ax4.set_title(f"MTF at Nyquist:{mtf.mtfAtNyquist:0.2f}%\nTransition Width:{esf.width:0.2f}")
-        ax4.grid(True)
+        ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.2f}%\nMTF at Nyquist: {mtf.mtfAtNyquist:0.2f}%")
+        ax4.plot(1.0, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
+        ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{fraction*100} Frequency', ms=3)
+        ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.2f} degrees", ha='left', va='top')
+        ax4.text(0.5, 0.94, f"Width: {esf.width:0.2f} pixels", ha='left', va='top')
+        ax4.text(0.5, 0.89, f"Threshold: {esf.threshold:0.2f}", ha='left', va='top')
+        ax4.set_xlabel('Normalized Frequency')
+        ax4.set_ylabel('MTF Value')
+        ax4.minorticks_on()
 
         plt.tight_layout()
         plt.show()
@@ -366,6 +387,7 @@ print("Currently working in" + dir + images_folder)
 for i in os.listdir():
   if i.endswith(".png"):
     print("Processing image: " + i)
+    fraction = #your desired MTF. e.g. 0.5 for MTF50
     filename=i.replace('.png', '_mtf.png')
     img = Transform.LoadImg(i)
     imgArr = Transform.Arrayify(img)

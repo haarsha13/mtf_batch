@@ -362,7 +362,8 @@ class MTF:
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
     mtf, cutoff_freq = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
-
+    w, h = imgArr.shape[0], imgArr.shape[1]
+      
     # if verticality > 0:
     #     verticality = "Vertical"
     # else:

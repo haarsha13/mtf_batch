@@ -422,9 +422,7 @@ class MTF:
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
       
 def _raw_edge_angle_deg(arr01):
-  \"\"\"Estimate dominant edge angle (deg) from the *raw* (un-orientified) image.
-  Uses the same Canny+polyfit approach as GetESF_crop but without any flips.
-  \"\"\"
+  
   import numpy as _np, cv2 as _cv2, math as _math
   a = _np.asarray(arr01, dtype=float)
   if a.max() > 1.0:  # normalize if not already 0..1

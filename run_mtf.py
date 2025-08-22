@@ -43,7 +43,7 @@ def _run_on_file(rs, ipath: Path, out_dir: Path | None):
     img = rs.Transform.LoadImg(str(ipath))
     arr = rs.Transform.Arrayify(img)
     # Produce the full figure (DETAIL) but it won't try to display because of Agg/no-op show
-    rs.MTF.MTF_Full(arr, verbose=rs.Verbosity.DETAIL)
+    rs.MTF.MTF_Full(arr, 0.5, verbose=rs.Verbosity.DETAIL)
     out_dir = out_dir or ipath.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{ipath.stem}_mtf.png"

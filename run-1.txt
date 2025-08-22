@@ -1,2 +1,5 @@
 .\.venv\Scripts\python.exe run_mtf.py
 py run_resolution_mtf.py
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1

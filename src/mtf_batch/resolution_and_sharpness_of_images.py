@@ -89,16 +89,20 @@ class Transform:
     cornerIndexes = np.argsort(corners)
 
     if (cornerIndexes[0] + cornerIndexes[1]) == 1:
+      vertical = 1
       pass
     elif(cornerIndexes[0] + cornerIndexes[1]) == 5:
       Arr = np.flip(Arr, axis=0)
+      vertical = 1
     elif(cornerIndexes[0] + cornerIndexes[1]) == 2:
       Arr = np.transpose(Arr)
+      vertical = 0
     elif(cornerIndexes[0] + cornerIndexes[1]) == 4:
       Arr = np.flip(np.transpose(Arr), axis=0)
+      vertical = 0
 
-    return Arr
-
+    return Arr, vertical # returns the array and whether it is vertical or not (1 for vertical, 0 for horizontal)
+      
 """## MTF Functions
 
 """
@@ -298,10 +302,10 @@ class MTF:
     values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
     distances = np.arange(0,N)/N*px
 
-    interpDistances = np.linspace(0,1,50)
+    interpDistances = np.linspace(0,1,200)
     interp = interpolate.interp1d(distances, values, kind='cubic')
     interpValues = interp(interpDistances)
-    valueAtNyquist = interpValues[25]*100
+    valueAtNyquist = interpValues[100]*100
 
     target = fraction
     crossing_idx = np.where(interpValues <= target)[0]
@@ -329,6 +333,11 @@ class MTF:
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
     mtf, cutoff_freq = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
 
+    if verticality > 0:
+        verticality = "Vertical"
+    else:
+        verticality = "Horizontal"
+    
     if (verbose == Verbosity.DETAIL):
         plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
         x = [0, np.size(imgArr,1)-1]
@@ -343,7 +352,7 @@ class MTF:
         ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
         ax1.plot(x, y, color='red')
         ax1.axis('off')
-        ax1.set_title(f"Original Image\nDimensions: {w} by {h}")
+        ax1.set_title(f"Original Image\nDimensions: {w} by {h}\nOrientation: {verticality}")
         ax2.plot(esf.rawESF.x, esf.rawESF.y,
                  esf.interpESF.x, esf.interpESF.y)
         top = np.max(esf.rawESF.y)-esf.threshold
@@ -363,7 +372,7 @@ class MTF:
 
         ax4.plot(mtf.x, mtf.y)
         ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.2f}%\nMTF at Nyquist: {mtf.mtfAtNyquist:0.2f}%")
-        ax4.plot(1.0, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
+        ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
         ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{fraction*100} Frequency', ms=3)
         ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.2f} degrees", ha='left', va='top')
         ax4.text(0.5, 0.94, f"Width: {esf.width:0.2f} pixels", ha='left', va='top')

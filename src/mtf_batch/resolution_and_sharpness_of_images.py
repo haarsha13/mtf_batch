@@ -53,6 +53,32 @@ class Verbosity(Enum): # output types/level of output
 
 """## Image importing Functions"""
 
+def _otsu_threshold01(gray):
+  import numpy as _np
+  g = _np.clip(gray, 0.0, 1.0)
+  hist, bin_edges = _np.histogram(g.ravel(), bins=256, range=(0.0, 1.0))
+  hist = hist.astype(float)
+  prob = hist / (hist.sum() + 1e-12)
+  omega = _np.cumsum(prob)
+  centers = bin_edges[:-1] + (bin_edges[1]-bin_edges[0])/2.0
+  mu = _np.cumsum(prob * centers)
+  mu_t = mu[-1]
+  sigma_b2 = (mu_t * omega - mu)**2 / (omega * (1.0 - omega) + 1e-12)
+  idx = int(_np.nanargmax(sigma_b2))
+  return float(bin_edges[idx])
+
+def _michelson_contrast01(gray):
+  import numpy as _np
+  t = _otsu_threshold01(gray)
+  dark = gray[gray <= t]
+  bright = gray[gray > t]
+  if dark.size < 5 or bright.size < 5:
+    return 0.0
+  Imin = float(dark.mean())
+  Imax = float(bright.mean())
+  denom = (Imax + Imin)
+  return float((Imax - Imin) / denom) if denom != 0 else 0.0
+    
 class Transform:
 
   @staticmethod
@@ -315,44 +341,106 @@ class MTF:
     return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0)
 
   @staticmethod
-  def MTF_Full(imgArr, verbose=Verbosity.NONE):
+  def MTF_Full(imgArr, verbose=Verbosity.NONE, filename: str | None = None):
+    raw_for_angle = imgArr.copy()
+    orig_angle = _raw_edge_angle_deg(raw_for_angle)
+    # Ensure canonical orientation for analysis
     imgArr = Transform.Orientify(imgArr)
-    esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
-    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf = MTF.GetMTF(lsf, Verbosity.DETAIL)  # see MTF plot
+    # Compute ESF/LSF/MTF
+    esf = MTF.GetESF_crop(imgArr, Verbosity.BRIEF if verbose!=Verbosity.NONE else Verbosity.NONE)
+    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
+    mtf = MTF.GetMTF(lsf, Verbosity.NONE)
 
     if (verbose == Verbosity.DETAIL):
-        plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
+        # Figure layout (similar to your reference with orientation/metadata)
+        plt.figure(figsize=(10,7))
+
         x = [0, np.size(imgArr,1)-1]
         y = np.polyval(esf.edgePoly, x)
 
-        gs = plt.GridSpec(3, 2)
-        ax1 = plt.subplot(gs[0, 0])
-        ax2 = plt.subplot(gs[1, 0])
-        ax3 = plt.subplot(gs[2, 0])
-        ax4 = plt.subplot(gs[:, 1])
+        gs = plt.GridSpec(3, 2, width_ratios=[1.1, 1.4])
+        ax1 = plt.subplot(gs[0, 0])   # ROI
+        ax2 = plt.subplot(gs[1, 0])   # Edge profile (ESF)
+        ax3 = plt.subplot(gs[2, 0])   # LSF
+        ax4 = plt.subplot(gs[:, 1])   # MTF + info panel
 
+        # Subplot: ROI/Image with detected edge overlay
         ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
-        ax1.plot(x, y, color='red')
+        ax1.plot(x, y, color='red', linewidth=1.25)
+        ax1.set_title("ROI / Image")
         ax1.axis('off')
-        ax2.plot(esf.rawESF.x, esf.rawESF.y,
-                 esf.interpESF.x, esf.interpESF.y)
+
+        # Subplot: Edge profile (raw + interpolated)
+        ax2.plot(esf.rawESF.x, esf.rawESF.y, label="Raw ESF")
+        ax2.plot(esf.interpESF.x, esf.interpESF.y, label="Smoothed ESF")
         top = np.max(esf.rawESF.y)-esf.threshold
         bot = np.min(esf.rawESF.y)+esf.threshold
-        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
-        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
-        ax2.xaxis.set_visible(True)
-        ax2.yaxis.set_visible(True)
+        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red', linewidth=1.0)
+        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red', linewidth=1.0)
+        ax2.set_title("Edge profile: Vertical")
+        ax2.set_xlabel("Distance (pixels)")
+        ax2.set_ylabel("Edge profile (linear)")
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc="lower right", fontsize=8)
+
+        # Subplot: LSF
         ax3.plot(lsf.x, lsf.y)
-        ax3.xaxis.set_visible(True)
-        ax3.yaxis.set_visible(True)
-        ax4.plot(mtf.x, mtf.y)
-        ax4.set_title(f"MTF at Nyquist:{mtf.mtfAtNyquist:0.2f}%\nTransition Width:{esf.width:0.2f}")
-        ax4.grid(True)
+        ax3.set_xlabel("Distance (pixels)")
+        ax3.set_ylabel("LSF (normalized)")
+        ax3.grid(True, alpha=0.3)
+
+        # Subplot: MTF with Nyquist line + info box
+        ax4.plot(mtf.x, mtf.y, linewidth=1.5)
+        ax4.axvline(0.5, linestyle="--", linewidth=1.0)  # Nyquist at 0.5 cyc/pix
+        ax4.set_xlim(0.0, 1.0)
+        ax4.set_ylim(0.0, 1.05)
+        ax4.set_xlabel("Frequency, Cycles/pixel")
+        ax4.set_ylabel("MTF")
+        ax4.set_title(f"MTF at Nyquist: {mtf.mtfAtNyquist:0.2f}%")
+        ax4.grid(True, alpha=0.3)
+
+        # Orientation + contrast + dims info
+        H, W = imgArr.shape[:2]
+        contrast = _michelson_contrast01(imgArr)
+        info = (
+            f"Original edge angle: {orig_angle:.2f}°\n"
+            f"Normalized edge angle: {esf.angle:.2f}°\n"
+            f"Est. chart contrast: {contrast*100:.1f}%\n"
+            f"Image width: {W} px\n"
+            f"Image height: {H} px\n"
+            f"Transition width: {esf.width:.2f} px\n"
+            f"Threshold: {esf.threshold:.2f}"
+        )
+        ax4.text(0.62, 0.75, info, transform=ax4.transAxes, ha='left', va='top')
+
+        if filename:
+            plt.suptitle(filename, y=0.98)
 
         plt.tight_layout()
         plt.show()
+
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
+      
+def _raw_edge_angle_deg(arr01):
+  \"\"\"Estimate dominant edge angle (deg) from the *raw* (un-orientified) image.
+  Uses the same Canny+polyfit approach as GetESF_crop but without any flips.
+  \"\"\"
+  import numpy as _np, cv2 as _cv2, math as _math
+  a = _np.asarray(arr01, dtype=float)
+  if a.max() > 1.0:  # normalize if not already 0..1
+    a = a / 255.0
+  a = _np.squeeze(a)
+  if a.ndim == 3 and a.shape[2] >= 3:
+    # luminance
+    a = 0.2126*a[...,0] + 0.7152*a[...,1] + 0.0722*a[...,2]
+  edgeImg = _cv2.Canny(_np.uint8(_np.clip(a,0,1)*255), 40, 90, L2gradient=True)
+  line = _np.argwhere(edgeImg == 255)
+  if line.size < 2:
+    return 0.0
+  edgePoly = _np.polyfit(line[:,1], line[:,0], 1)
+  angle = _math.degrees(_math.atan(-edgePoly[0]))
+  return float(angle)
+
 
 import os
 

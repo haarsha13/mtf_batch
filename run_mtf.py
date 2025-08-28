@@ -3,22 +3,18 @@
 # ---------- CONFIG ----------
 INPUT = r"C:\PHYS3810\slant_edge_japan_best_192"   # folder or single image
 OUT_DIR = r"C:\Users\HAARSHA KRISHNA\OneDrive\Documents\GitHub\mtf_batch\outputs"
-             # or None
 EXTENSIONS = [".png"]                               # add ".jpg", ".jpeg", ".tif", ".tiff" if needed
 RECURSIVE = True                                    # True=rglob, False=glob
-MODULE_PATH = r"C:\Users\HAARSHA KRISHNA\OneDrive\Documents\GitHub\mtf_batch\src\mtf_batch\resolution_and_sharpness_of_images.py"
-
+MODULE_PATH = r"C:\Users\HAARSHA KRISHNA\OneDrive\Documents\GitHub\mtf_batch\src\mtf_batch\mtf_plus.py"
 # -------- END CONFIG --------
 
-import sys
 from pathlib import Path
 import importlib.util
 
-# Use headless backend to prevent plt.show() from blocking
+# Headless backend + no-op show
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-# Ensure any plt.show() inside the module doesn't block
 plt.show = lambda *a, **k: None
 
 def _load_module_from_path(path_str: str):
@@ -28,6 +24,10 @@ def _load_module_from_path(path_str: str):
     spec = importlib.util.spec_from_file_location(path.stem, str(path))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    # sanity-check the API we expect
+    for name in ("Transform", "MTF", "Verbosity"):
+        if not hasattr(mod, name):
+            raise AttributeError(f"Loaded module '{path.name}' has no attribute '{name}'")
     return mod
 
 def _collect_files(root: Path):
@@ -41,14 +41,20 @@ def _collect_files(root: Path):
         return [root]
 
 def _run_on_file(rs, ipath: Path, out_dir: Path | None):
-    img = rs.Transform.LoadImg(str(ipath))
-    arr = rs.Transform.Arrayify(img)
-    # Produce the full figure (DETAIL) but it won't try to display because of Agg/no-op show
+    # UNPACK the tuple from LoadImg and pass only the PIL image to Arrayify
+    gsimg, w, h = rs.Transform.LoadImg(str(ipath))
+    arr = rs.Transform.Arrayify(gsimg)
+
+    # Produce the full figure (DETAIL). show() is a no-op so nothing blocks.
     rs.MTF.MTF_Full(arr, 0.5, verbose=rs.Verbosity.DETAIL)
+
     out_dir = out_dir or ipath.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{ipath.stem}_mtf.png"
-    plt.savefig(out_path, bbox_inches="tight", dpi=300)
+
+    # Save the current (last-created) figure explicitly
+    fig = plt.gcf()
+    fig.savefig(out_path, bbox_inches="tight", dpi=300)
     plt.close("all")
     return out_path
 
@@ -62,7 +68,8 @@ def main():
     outputs = []
     for f in files:
         try:
-            print(" -", f if not f.is_relative_to(ipath) else f.relative_to(ipath))
+            rel = f.relative_to(ipath) if f.is_relative_to(ipath) else f
+            print(" -", rel)
         except Exception:
             print(" -", f)
         try:

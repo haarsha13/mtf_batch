@@ -342,8 +342,8 @@ class MTF:
   def GetMTF(LSF, fraction, verbose = Verbosity.NONE):
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
-
-    window = windows.blackman(N)
+    
+    window = windows.kaiser(N, beta=8)
     windowed_y = LSF.y * window
 
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
@@ -385,7 +385,7 @@ class MTF:
       ax1.plot(interpDistances, interpValues)
       plt.show(block = False)
       plt.show()
-    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y
+    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y, window
 
   @staticmethod
   def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE):
@@ -395,7 +395,9 @@ class MTF:
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf, cutoff_freq, windowed_y = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
+    mtf, cutoff_freq, windowed_y, window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
+
+
 
     if verticality > 0:
         verticality = "Vertical"
@@ -431,7 +433,8 @@ class MTF:
         ax2.minorticks_on()
 
         ax3.plot(lsf.x, lsf.y, label='No_Window', alpha = 0.7)
-        ax3.plot(lsf.x, windowed_y, label='Blackman_Window', alpha = 0.7)
+        ax3.plot(lsf.x, windowed_y, label='Kaiser_Window', alpha = 0.7)
+        ax3.plot(lsf.x, window, label='Window', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
         ax3.grid(True)
@@ -457,21 +460,21 @@ class MTF:
 import os
 
 # Main working directory.
-images_folder = "img folder dir"
-dir = "main dir"
+images_folder = "\\slant_edge_japan_best"
+dir = "C:\\Users\\howef\\OneDrive\\Desktop\\Slant_MTF_TEST"
 os.chdir(dir + images_folder)
 print("Currently working in" + dir + images_folder)
 
 # Image processing for all in folder that ends with .png
 for i in os.listdir():
-  if i.endswith(".png"):
+  if i.endswith("5455_depth-600um.png"):
     print("Processing image: " + i)
     fraction = 0.5  # MTF fraction to calculate
     filename=i.replace('.png', '_mtf.png')
     img = Transform.LoadImg(i)
     imgArr = Transform.Arrayify(img[0])
     res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
-    plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300) # New_Results can be any location of your choosing. 
+    plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300)
     plt.close('all')
 
 # Saves all as an image with the same name as the original but with _mtf.png appended instead of .png

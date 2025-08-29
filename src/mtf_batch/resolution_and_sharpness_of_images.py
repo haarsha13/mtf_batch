@@ -15,12 +15,16 @@ import pylab as pylab
 import numpy as np
 import cv2 as cv2
 import math as math
+import pandas as pd
+import json
+
 
 from PIL import Image, ImageOps
 from scipy import interpolate
 from scipy.fft import fft
 from scipy.signal import windows
 from enum import Enum
+from pathlib import Path
 from dataclasses import dataclass
 
 @dataclass
@@ -49,6 +53,25 @@ class Verbosity(Enum): # output types/level of output
   NONE = 0 # none
   BRIEF = 1 # text
   DETAIL = 2 # graphical
+
+@dataclass
+class MTFReport:
+    filename: str
+    image_w: int
+    image_h: int
+    edge_profile: str
+    angle_deg: float
+    width_px: float
+    threshold: float
+    contrast: float
+    mtf_fraction: float
+    mtf50_freq: float | None         # frequency (normalized) where MTF crosses `mtf_fraction`
+    mtf_at_nyquist: float            # MTF value at 0.5 (0..1 scale)
+    nyquist_frequency: float         # always 0.5 (normalized)
+    mtf_x: np.ndarray                # full MTF x (normalized frequency)
+    mtf_y: np.ndarray                # full MTF y (values)
+    lsf_x: np.ndarray                # optional: LSF x
+    lsf_y: np.ndarray                # optional: LSF y
 
 """## Image importing Functions"""
 
@@ -155,6 +178,33 @@ class MTF:
   # values = array of brightnesses
   # head = top limit
   # tail = bottom limit
+
+  @staticmethod
+  def Center_ESF(esf_raw, esf_interp, verbose=Verbosity.NONE):
+    """
+    Shift ESF x-axes so the 50% intensity point (half-level) is at x = 0.
+    Uses the smoothed/interpolated ESF to estimate the edge location,
+    then applies the same shift to BOTH raw and interpolated ESF.
+
+    Returns:
+        (esf_raw_centered: cSet, esf_interp_centered: cSet, x_edge: float)
+    """
+    Imin = float(np.min(esf_interp.y))
+    Imax = float(np.max(esf_interp.y))
+    half = (Imin + Imax) * 0.5
+
+    # Find where smoothed ESF is closest to half-level
+    idx = int(np.argmin(np.abs(esf_interp.y - half)))
+    x_edge = float(esf_interp.x[idx])
+
+    esf_raw_c   = cSet(esf_raw.x   - x_edge, esf_raw.y)
+    esf_interp_c = cSet(esf_interp.x - x_edge, esf_interp.y)
+
+    if verbose == Verbosity.BRIEF:
+        print(f"ESF Center [done] (edge @ x={x_edge:0.3f} → shifted to 0)")
+
+    return esf_raw_c, esf_interp_c, x_edge
+
   @staticmethod
   def crop(values, distances, head, tail):
     isIncrementing = True
@@ -268,23 +318,31 @@ class MTF:
 
     esfInterp = cSet(InterpDistances, InterpValues)
 
+    # --- NEW: center both raw & interp ESF at the 50% level ---
+    esfRaw_c, esfInterp_c, x_edge = MTF.Center_ESF(esfRaw, esfInterp, verbose=verbose)
+
     if (verbose == Verbosity.BRIEF):
-        print(f"ESF Crop [done] (Distance from {0:2.2f} to {1:2.2f})".format(esfRaw.x[0], esfRaw.x[-1]))
+        print(f"ESF Crop [done] (Distance from {esfRaw_c.x[0]:2.2f} to {esfRaw_c.x[-1]:2.2f})")
 
     elif (verbose == Verbosity.DETAIL):
         x = [0, np.size(imgArr,1)-1]
         y = np.polyval(finalEdgePoly, x)
 
         fig = pylab.gcf()
-        fig.canvas.manager.set_window_title('ESF Crop')
+        fig.canvas.manager.set_window_title('ESF Crop (centered)')
         (ax1, ax2) = plt.subplots(2)
         ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
         ax1.plot(x, y, color='red')
-        ax2.plot(esfRaw.x, esfRaw.y,InterpDistances,InterpValues)
+        ax2.plot(esfRaw_c.x, esfRaw_c.y, label='Raw (centered)')
+        ax2.plot(esfInterp_c.x, esfInterp_c.y, label='Smooth (centered)')
+        ax2.axvline(0.0, linestyle='--')
+        ax2.legend()
         plt.show(block=False)
         plt.show()
 
-    return cESF(esfRaw, esfInterp, threshold, width, angle, edgePoly)
+
+    return cESF(esfRaw_c, esfInterp_c, threshold, width, angle, edgePoly)
+
 
   @staticmethod
   def Simplify_ESF(ESF, verbose=Verbosity.NONE):
@@ -343,7 +401,7 @@ class MTF:
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 
-    window = windows.blackman(N)
+    window = windows.kaiser(N,beta=8)
     windowed_y = LSF.y * window
 
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
@@ -385,7 +443,7 @@ class MTF:
       ax1.plot(interpDistances, interpValues)
       plt.show(block = False)
       plt.show()
-    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y
+    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y, window
 
   @staticmethod
   def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE):
@@ -395,7 +453,7 @@ class MTF:
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf, cutoff_freq, windowed_y = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
+    mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
 
     if verticality > 0:
         verticality = "Vertical"
@@ -432,6 +490,7 @@ class MTF:
 
         ax3.plot(lsf.x, lsf.y, label='No_Window', alpha = 0.7)
         ax3.plot(lsf.x, windowed_y, label='Blackman_Window', alpha = 0.7)
+        ax3.plot(lsf.x, window, label='Window', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
         ax3.grid(True)
@@ -454,27 +513,78 @@ class MTF:
         #plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
-import os
+  @staticmethod
+  def analyze(imgArr, filename="", fraction=0.5):
+    """Pure analysis (metrics+arrays), no plotting."""
+    contrast = Transform._michelson_contrast01(imgArr)
+    imgArr2, verticality = Transform.Orientify(imgArr)
+    w, h = imgArr2.shape[0], imgArr2.shape[1]
 
-# Main working directory.
-images_folder = "img folder dir"
-dir = "main dir"
-os.chdir(dir + images_folder)
-print("Currently working in" + dir + images_folder)
+    esf = MTF.GetESF_crop(imgArr2, Verbosity.NONE)
+    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
+    mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE)
 
-# Image processing for all in folder that ends with .png
-for i in os.listdir():
-  if i.endswith(".png"):
-    print("Processing image: " + i)
-    fraction = 0.5  # MTF fraction to calculate
-    filename=i.replace('.png', '_mtf.png')
-    img = Transform.LoadImg(i)
-    imgArr = Transform.Arrayify(img[0])
-    res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
-    plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300) # New_Results can be any location of your choosing. 
-    plt.close('all')
+    edge_profile = "Vertical" if verticality > 0 else "Horizontal"
+    mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
 
-# Saves all as an image with the same name as the original but with _mtf.png appended instead of .png
-# These also each are analyzed and saved in order of the original images. 
+    return MTFReport(
+            filename=str(filename),
+            image_w=int(w), image_h=int(h),
+            edge_profile=edge_profile,
+            angle_deg=float(esf.angle),
+            width_px=float(esf.width),
+            threshold=float(esf.threshold),
+            contrast=float(contrast),
+            mtf_fraction=float(fraction),
+            mtf50_freq=(float(cutoff_freq) if cutoff_freq is not None else None),
+            mtf_at_nyquist=mtf_at_nyquist,
+            nyquist_frequency=0.5,
+            mtf_x=mtf.x, mtf_y=mtf.y,
+            lsf_x=lsf.x, lsf_y=lsf.y
+    )
 
-print("All saved")
+    # Back-compat alias if you already called AnalyzeToReport elsewhere
+    AnalyzeToReport = analyze
+
+  @staticmethod
+  def run(imgArr, fraction=0.5, plot=False, verbose=Verbosity.NONE, filename=""):
+        """
+        Single public entrypoint:
+          - always does analysis and returns an MTFReport
+          - if plot=True, also renders the usual figure and returns the Matplotlib Figure
+        """
+        rep = MTF.analyze(imgArr, filename=filename, fraction=fraction)
+
+        fig = None
+        if plot:
+            # reuse your existing full-figure function
+            MTF.MTF_Full(imgArr, fraction, verbose=verbose)
+            import matplotlib.pyplot as plt
+            fig = plt.gcf()
+    
+        return rep, fig
+
+# import os
+
+# # Main working directory.
+# images_folder = "img folder dir"
+# dir = "main dir"
+# os.chdir(dir + images_folder)
+# print("Currently working in" + dir + images_folder)
+
+# # Image processing for all in folder that ends with .png
+# for i in os.listdir():
+#   if i.endswith(".png"):
+#     print("Processing image: " + i)
+#     fraction = 0.5  # MTF fraction to calculate
+#     filename=i.replace('.png', '_mtf.png')
+#     img = Transform.LoadImg(i)
+#     imgArr = Transform.Arrayify(img[0])
+#     res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
+#     plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300) # New_Results can be any location of your choosing. 
+#     plt.close('all')
+
+# # Saves all as an image with the same name as the original but with _mtf.png appended instead of .png
+# # These also each are analyzed and saved in order of the original images. 
+
+# print("All saved")

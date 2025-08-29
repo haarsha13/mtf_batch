@@ -15,12 +15,16 @@ import pylab as pylab
 import numpy as np
 import cv2 as cv2
 import math as math
+import pandas as pd
+import json
+
 
 from PIL import Image, ImageOps
 from scipy import interpolate
 from scipy.fft import fft
 from scipy.signal import windows
 from enum import Enum
+from pathlib import Path
 from dataclasses import dataclass
 
 @dataclass
@@ -49,6 +53,25 @@ class Verbosity(Enum): # output types/level of output
   NONE = 0 # none
   BRIEF = 1 # text
   DETAIL = 2 # graphical
+
+@dataclass
+class MTFReport:
+    filename: str
+    image_w: int
+    image_h: int
+    edge_profile: str
+    angle_deg: float
+    width_px: float
+    threshold: float
+    contrast: float
+    mtf_fraction: float
+    mtf50_freq: float | None         # frequency (normalized) where MTF crosses `mtf_fraction`
+    mtf_at_nyquist: float            # MTF value at 0.5 (0..1 scale)
+    nyquist_frequency: float         # always 0.5 (normalized)
+    mtf_x: np.ndarray                # full MTF x (normalized frequency)
+    mtf_y: np.ndarray                # full MTF y (values)
+    lsf_x: np.ndarray                # optional: LSF x
+    lsf_y: np.ndarray                # optional: LSF y
 
 """## Image importing Functions"""
 
@@ -489,6 +512,57 @@ class MTF:
         plt.tight_layout()
         #plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
+
+  @staticmethod
+  def analyze(imgArr, filename="", fraction=0.5):
+    """Pure analysis (metrics+arrays), no plotting."""
+    contrast = Transform._michelson_contrast01(imgArr)
+    imgArr2, verticality = Transform.Orientify(imgArr)
+    w, h = imgArr2.shape[0], imgArr2.shape[1]
+
+    esf = MTF.GetESF_crop(imgArr2, Verbosity.NONE)
+    lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
+    mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE)
+
+    edge_profile = "Vertical" if verticality > 0 else "Horizontal"
+    mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
+
+    return MTFReport(
+            filename=str(filename),
+            image_w=int(w), image_h=int(h),
+            edge_profile=edge_profile,
+            angle_deg=float(esf.angle),
+            width_px=float(esf.width),
+            threshold=float(esf.threshold),
+            contrast=float(contrast),
+            mtf_fraction=float(fraction),
+            mtf50_freq=(float(cutoff_freq) if cutoff_freq is not None else None),
+            mtf_at_nyquist=mtf_at_nyquist,
+            nyquist_frequency=0.5,
+            mtf_x=mtf.x, mtf_y=mtf.y,
+            lsf_x=lsf.x, lsf_y=lsf.y
+    )
+
+    # Back-compat alias if you already called AnalyzeToReport elsewhere
+    AnalyzeToReport = analyze
+
+  @staticmethod
+  def run(imgArr, fraction=0.5, plot=False, verbose=Verbosity.NONE, filename=""):
+        """
+        Single public entrypoint:
+          - always does analysis and returns an MTFReport
+          - if plot=True, also renders the usual figure and returns the Matplotlib Figure
+        """
+        rep = MTF.analyze(imgArr, filename=filename, fraction=fraction)
+
+        fig = None
+        if plot:
+            # reuse your existing full-figure function
+            MTF.MTF_Full(imgArr, fraction, verbose=verbose)
+            import matplotlib.pyplot as plt
+            fig = plt.gcf()
+    
+        return rep, fig
 
 # import os
 

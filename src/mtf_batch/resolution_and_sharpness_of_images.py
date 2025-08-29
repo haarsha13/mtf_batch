@@ -19,6 +19,7 @@ import math as math
 from PIL import Image, ImageOps
 from scipy import interpolate
 from scipy.fft import fft
+from scipy.signal import windows
 from enum import Enum
 from dataclasses import dataclass
 
@@ -341,7 +342,14 @@ class MTF:
   def GetMTF(LSF, fraction, verbose = Verbosity.NONE):
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
-    values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
+
+    window = windows.blackman(N)
+    windowed_y = LSF.y * window
+
+    values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
+
+    #values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
+    
     distances = np.arange(0,N)/N*px
 
     interpDistances = np.linspace(0,1,200)
@@ -377,18 +385,17 @@ class MTF:
       ax1.plot(interpDistances, interpValues)
       plt.show(block = False)
       plt.show()
-    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq
+    return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y
 
   @staticmethod
-  def MTF_Full(imgArr, fraction, w=None, h=None, verbose=Verbosity.NONE):
+  def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE):
+    contrast = Transform._michelson_contrast01(imgArr_orig)
 
-    contrast = Transform._michelson_contrast01(imgArr)
-
-    imgArr, verticality = Transform.Orientify(imgArr)
+    imgArr, verticality = Transform.Orientify(imgArr_orig)
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf, cutoff_freq = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
+    mtf, cutoff_freq, windowed_y = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
 
     if verticality > 0:
         verticality = "Vertical"
@@ -397,6 +404,7 @@ class MTF:
 
     if (verbose == Verbosity.DETAIL):
         plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
+
         x = [0, np.size(imgArr,1)-1]
         y = np.polyval(esf.edgePoly, x)
 
@@ -406,10 +414,11 @@ class MTF:
         ax3 = plt.subplot(gs[2, 0])
         ax4 = plt.subplot(gs[:, 1])
 
-        ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
-        ax1.plot(x, y, color='red')
+        ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
+        ax1.plot(x, y, color='red', label = 'Edge After Orientation')
         ax1.axis('off')
         ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
+        ax1.legend(loc='lower left', fontsize=5)
         ax2.plot(esf.rawESF.x, esf.rawESF.y,
                  esf.interpESF.x, esf.interpESF.y)
         top = np.max(esf.rawESF.y)-esf.threshold
@@ -421,11 +430,13 @@ class MTF:
         ax2.grid(True)
         ax2.minorticks_on()
 
-        ax3.plot(lsf.x, lsf.y)
+        ax3.plot(lsf.x, lsf.y, label='No_Window', alpha = 0.7)
+        ax3.plot(lsf.x, windowed_y, label='Blackman_Window', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
         ax3.grid(True)
         ax3.minorticks_on()
+        ax3.legend(loc='upper right', fontsize=5)
 
         ax4.plot(mtf.x, mtf.y)
         ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.3f}\nMTF at Nyquist: {mtf.mtfAtNyquist/100:0.5f}")
@@ -443,31 +454,27 @@ class MTF:
         #plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
+import os
 
-# -----------------------------
-# Example batch (commented)
-# -----------------------------
+# Main working directory.
+images_folder = "img folder dir"
+dir = "main dir"
+os.chdir(dir + images_folder)
+print("Currently working in" + dir + images_folder)
 
-# import os
-# # Main working directory.
-# images_folder = "\\\\Your own image folder name"
-# dir = "Your own directory"
-# os.chdir(dir + images_folder)
-# print("Currently working in " + dir + images_folder)
-#
-# # Image processing for all in folder that ends with .png
-# for i in os.listdir():
-#     if i.endswith(".png"):
-#         print("Processing image: " + i)
-#         fraction = 0.5  # your desired MTF. e.g. 0.5 for MTF50
-#         filename = i.replace('.png', '_mtf.png')
-#         img = Transform.LoadImg(i)
-#         imgArr = Transform.Arrayify(img)
-#         res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
-#         plt.savefig(filename, bbox_inches='tight', dpi=300)
-#         plt.close('all')
-#
-# print("Done.")
+# Image processing for all in folder that ends with .png
+for i in os.listdir():
+  if i.endswith(".png"):
+    print("Processing image: " + i)
+    fraction = 0.5  # MTF fraction to calculate
+    filename=i.replace('.png', '_mtf.png')
+    img = Transform.LoadImg(i)
+    imgArr = Transform.Arrayify(img[0])
+    res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
+    plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300) # New_Results can be any location of your choosing. 
+    plt.close('all')
 
+# Saves all as an image with the same name as the original but with _mtf.png appended instead of .png
+# These also each are analyzed and saved in order of the original images. 
 
-
+print("All saved")

@@ -21,10 +21,10 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/Images"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/PHYS3810/Patches"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/Github/mtf_batch/outputs"
 
 # Your local module paths:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/mtf_plus.py"
+MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
 HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
 
 # File matching (recursively). Use "*.png" OR e.g. "exportimage_*_um.png"
@@ -176,11 +176,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
             return getattr(obj, name, default)
 
         rows.append({
-            "source_folder": src_path.parent.name,
             "source_image": src_path.name,
-            "patch_folder": str(img_out_dir),
-            "patch_file": patch_name,
-            "patch_idx": i,
             "x_pix": int(cxy[0]),
             "y_pix": int(cxy[1]),
             "image_w": _get(rep, "image_w"),
@@ -190,11 +186,8 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
             "width_px": _get(rep, "width_px"),
             "threshold": _get(rep, "threshold"),
             "contrast": _get(rep, "contrast"),
-            "mtf_fraction": _get(rep, "mtf_fraction"),
             "mtf50_freq": _get(rep, "mtf50_freq"),
-            "nyquist_frequency": _get(rep, "nyquist_frequency"),
             "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
-            "figure_path": str(fig_path) if fig_path else None,
         })
 
     if SAVE_PER_IMAGE_MANIFEST:

@@ -1,7 +1,7 @@
 # run_mtf.py — headless batch runner (single CSV, optional figures)
 
 # ---------- CONFIG ----------
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/slant_edge_japan_best_192"  # folder or single image
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/slant_edge_japan_best_192"   # folder or single image
 OUT_DIR = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs"
 EXTENSIONS = [".png"]                               # add ".jpg", ".jpeg", ".tif", ".tiff" if needed
 RECURSIVE = True                                    # True=rglob, False=glob

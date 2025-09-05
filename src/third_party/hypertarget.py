@@ -1,4 +1,7 @@
 from __future__ import print_function
+import json
+
+import pandas as pd
 
 from csqa import logging
 
@@ -557,3 +560,35 @@ class HyperTarget:
 
         return darkvar / nfields, darkmean / nfields, brightvar / nfields, brightmean / nfields
 
+# Example input image (change this path to your own test image)
+raw_im_file = r"/Users/haarshakrishna/Documents/PHYS3810/SN003/exportimage_1661745487089_-10_um.png"
+
+# Define output files
+im_file = r"/Users/haarshakrishna/Documents/PHYS3810/SN003/output_image.png"
+json_file = r"/Users/haarshakrishna/Documents/PHYS3810/SN003/exportimage_1661745487089_-10_um.json"
+csv_file = r"/Users/haarshakrishna/Documents/PHYS3810/SN003/exportimage_1661745487089_-10_um.csv"
+
+# Load image (grayscale)
+raw_im = load_image(raw_im_file, return_unfiltered=True)[1]  # get unfiltered grayscale
+
+# Save image
+plt.imsave(im_file, raw_im, cmap="gray")
+
+# Dump metadata (for now, just saving shape & dtype)
+metadata = {"shape": raw_im.shape, "dtype": str(raw_im.dtype)}
+json.dump(metadata, open(json_file, "w"))
+
+# Initialize HyperTarget
+ht = HyperTarget(raw_im, plot_slant=True, plot_patches=True)
+
+# Save slant-edge patch coordinates
+df_patches = pd.DataFrame({
+    "x_pix": ht.slant_ifieldsXY[:, 0],
+    "y_pix": ht.slant_ifieldsXY[:, 1]
+})
+df_patches.to_csv(csv_file, index=False)
+
+# Plot overview
+plt.title("Hypertarget Example")
+plt.imshow(raw_im, cmap="gray")
+plt.show()

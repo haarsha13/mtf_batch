@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from csqa import logging
+import logging
 
 import cv2
 import matplotlib.pyplot as plt

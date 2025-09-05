@@ -1,11 +1,11 @@
 # run_mtf.py — headless batch runner (single CSV, optional figures)
 
 # ---------- CONFIG ----------
-INPUT = r"C:\PHYS3810\slant_edge_japan_best_192"   # folder or single image
-OUT_DIR = r"C:/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/slant_edge_japan_best_192"  # folder or single image
+OUT_DIR = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs"
 EXTENSIONS = [".png"]                               # add ".jpg", ".jpeg", ".tif", ".tiff" if needed
 RECURSIVE = True                                    # True=rglob, False=glob
-MODULE_PATH = r"C:/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/mtf_plus.py"
+MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/mtf_plus.py"
 
 FRACTION = 0.5                                      # 0.5 = MTF50
 WRITE_FIGURES = True                                # set False to skip PNG plots

@@ -5,6 +5,20 @@ matplotlib>=3.7
 pandas>=2.3.1
 scikit-image>=0.25.2
 Pillow>=11.3.0
+pylab
+math
+json
+enum
+pathlib
+dataclasses
+logging
+skimage
+sys
+traceback
+__future__
+importlib
+
+
 
 
 

@@ -1,8 +1,21 @@
-numpy
-opencv-python
-matplotlib
-pillow
-scipy
-pyyaml
-pandas
+## Requirements
+
+- Python 3.9+  
+- Dependencies:  
+  ```
+  numpy
+  scipy
+  opencv-python
+  matplotlib
+  pandas
+  scikit-image
+  pillow
+  ```
+
+To install dependencies, run:
+
+    pip install -r requirements.txt
+
+
+
 

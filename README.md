@@ -35,7 +35,8 @@ repo/
      - Edge angle, width, contrast.
 
 4. **Results**  
-   - Per-image: `patch_index.csv`, optional plots of ESF/LSF/MTF.  
+   - Per-image: MTF plots: for each patch, a figure is saved showing the ESF, LSF, and MTF curve (if WRITE_FIGURES = True).
+   - Cropped patch images themselves (saved as PNG).
    - Global: `mtf_summary_all.csv` (all patches across all images).
 
 ---
@@ -46,7 +47,7 @@ Open **`run_mtf.py`** and edit the config block at the top:
 
 ```python
 # ---------------- CONFIG (EDIT THESE) ----------------
-INPUT = r"/path/to/images"      # root containing SN003/, SN005/, etc.
+INPUT = r"/path/to/images"      
 PATCH_OUT_BASE = r"/path/to/outputs"
 
 MTF_MODULE_PATH = r"/path/to/MTF_HD.py"

@@ -379,6 +379,10 @@ class MTF:
     lsfDivisor = np.diff(ESF.x)
 
     lsfValues = np.divide(lsfDividend, lsfDivisor)
+
+    # Calculate the distances for the LSF as midpoints between ESF x values
+    #lsfDistances = 0.5*(ESF.x[:-1] + ESF.x[1:])
+
     lsfDistances = ESF.x[0:-1]
 
     if normalize:

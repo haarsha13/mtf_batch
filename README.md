@@ -28,7 +28,7 @@ source .venv/bin/activate
 
 # install all dependencies
 pip install -r requirements.txt
-
+```
 
 ## Workflow
 

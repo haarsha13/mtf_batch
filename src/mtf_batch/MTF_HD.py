@@ -564,27 +564,4 @@ class MTF:
     
         return rep, fig
 
-# import os
 
-# # Main working directory.
-# images_folder = "img folder dir"
-# dir = "main dir"
-# os.chdir(dir + images_folder)
-# print("Currently working in" + dir + images_folder)
-
-# # Image processing for all in folder that ends with .png
-# for i in os.listdir():
-#   if i.endswith(".png"):
-#     print("Processing image: " + i)
-#     fraction = 0.5  # MTF fraction to calculate
-#     filename=i.replace('.png', '_mtf.png')
-#     img = Transform.LoadImg(i)
-#     imgArr = Transform.Arrayify(img[0])
-#     res = MTF.MTF_Full(imgArr, fraction, verbose=Verbosity.DETAIL)
-#     plt.savefig(os.path.join(dir + images_folder + "\\New_Results", filename), bbox_inches='tight', dpi=300) # New_Results can be any location of your choosing. 
-#     plt.close('all')
-
-# # Saves all as an image with the same name as the original but with _mtf.png appended instead of .png
-# # These also each are analyzed and saved in order of the original images. 
-
-# print("All saved")

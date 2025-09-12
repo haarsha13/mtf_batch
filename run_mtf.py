@@ -176,6 +176,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
 
         rows.append({
             "source_image": src_path.name,
+            "depth_um": _get(rep, "depth_um"),  
             "x_pix": int(cxy[0]),
             "y_pix": int(cxy[1]),
             "image_w": _get(rep, "image_w"),

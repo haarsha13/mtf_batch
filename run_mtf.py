@@ -18,14 +18,14 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"C:\\Users\\howef\\OneDrive\\Desktop\\More_Images"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN006_ThroughFocusImages_Pt1"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"C:\\Users\\howef\\OneDrive\\Desktop\\test_sliced"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_results"
 
 # Your local module paths:
-MTF_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\resolution_code_u1.py"
-HYPER_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\hypertarget.py"
+MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
+HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
 
 # File matching (recursively). Use "*.png" OR e.g. "exportimage_*_um.png"
 FILENAME_GLOB = "*.png"
@@ -36,7 +36,7 @@ ORGANIZE_BY_PARENT = True
 # Patch controls
 PATCH_SIZE = 256          # square crop (pixels) around each slant center
 MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
-SAVE_PER_IMAGE_MANIFEST = True
+#SAVE_PER_IMAGE_MANIFEST = False
 
 # MTF controls
 FRACTION = 0.5            # 0.5 = MTF50

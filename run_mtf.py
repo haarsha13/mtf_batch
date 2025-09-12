@@ -17,15 +17,15 @@ import matplotlib.pyplot as plt
 plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
-# The folder that contains images to be sliced, works with subfolders too:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN006_ThroughFocusImages_Pt1"
+# The folder that contains images to be sliced, ... subfolders:
+INPUT = r""
 
-# Folder to write patches and results to:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs"
+# Where to write patches and results:
+PATCH_OUT_BASE = r""
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
-HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
+MTF_MODULE_PATH = r""
+HYPER_MODULE_PATH = r""
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"
@@ -36,6 +36,7 @@ ORGANIZE_BY_SUB = True
 # Patch controls
 PATCH_SIZE = 256          # square crop (pixels) around each slant center
 MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
+SAVE_PER_IMAGE_MANIFEST = True  # save CSV of each patch centers per image?
 
 # MTF controls
 FRACTION = 0.5            # 0.5 = MTF50 (what fraction of MTF to report)
@@ -117,6 +118,12 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
         "n_slant_centers": 0 if centers is None else int(len(centers)),
         "image_square_npix": int(getattr(ht, "image_square_npix", 0)),
     }
+
+    name = src_path.name
+    split_path = name.split("_")
+    depth = split_path[2]
+  
+
     with open(img_out_dir / "hypertarget_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
@@ -176,6 +183,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
 
         rows.append({
             "source_image": src_path.name,
+            "depth_um": depth,
             "x_pix": int(cxy[0]),
             "y_pix": int(cxy[1]),
             "image_w": _get(rep, "image_w"),
@@ -188,6 +196,10 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
             "mtf50_freq": _get(rep, "mtf50_freq"),
             "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
         })
+
+
+    if SAVE_PER_IMAGE_MANIFEST:
+      pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
 

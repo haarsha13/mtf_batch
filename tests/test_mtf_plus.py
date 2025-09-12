@@ -1,9 +1,14 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
 from mtf_batch.mtf_plus import calculate_from_path
 import matplotlib.pyplot as plt
 from pathlib import Path
 
 # change this to a real file you have
-img = r"G:\My Drive\MTF_mapper\slant_edge\patchX1057Y5455_depth-600um.png"
+img = r"/Users/haarshakrishna/Documents/PHYS3810/slant_edge_japan_best_192/patchX1057Y5455_depth-600um.png"
 
 m = calculate_from_path(img, pixel_pitch_um=4.6)  # set your pitch or None
 

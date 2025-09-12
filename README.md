@@ -16,6 +16,18 @@ repo/
 ```
 
 
+## Installation
+
+```bash
+# (recommended) create & activate a virtual env
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
+
+# install all dependencies
+pip install -r requirements.txt
 
 
 ## Workflow

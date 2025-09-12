@@ -17,15 +17,15 @@ import matplotlib.pyplot as plt
 plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
-# The folder that contains SN005/, SN009/, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/Images"
+# The folder that contains images to be sliced, ... subfolders:
+INPUT = r"C:\\Users\\howef\\OneDrive\\Desktop\\More_Images"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/Github/mtf_batch/outputs"
+PATCH_OUT_BASE = r"C:\\Users\\howef\\OneDrive\\Desktop\\test_sliced"
 
 # Your local module paths:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
-HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
+MTF_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\resolution_code_u1.py"
+HYPER_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\hypertarget.py"
 
 # File matching (recursively). Use "*.png" OR e.g. "exportimage_*_um.png"
 FILENAME_GLOB = "*.png"
@@ -189,9 +189,6 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
             "mtf50_freq": _get(rep, "mtf50_freq"),
             "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
         })
-
-    if SAVE_PER_IMAGE_MANIFEST:
-        pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
 

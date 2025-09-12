@@ -17,31 +17,30 @@ import matplotlib.pyplot as plt
 plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
-# The folder that contains images to be sliced, ... subfolders:
-INPUT = r"C:\\Users\\howef\\OneDrive\\Desktop\\More_Images"
+# The folder that contains images to be sliced, works with subfolders too:
+INPUT = r""
 
-# Where to write patches and results:
-PATCH_OUT_BASE = r"C:\\Users\\howef\\OneDrive\\Desktop\\test_sliced"
+# Folder to write patches and results to:
+PATCH_OUT_BASE = r""
 
-# Your local module paths:
-MTF_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\resolution_code_u1.py"
-HYPER_MODULE_PATH = r"C:\\Users\\howef\\OneDrive\Desktop\\VS projects\\hypertarget.py"
+# Your local paths to the MTF and HyperTarget modules:
+MTF_MODULE_PATH = r""
+HYPER_MODULE_PATH = r""
 
-# File matching (recursively). Use "*.png" OR e.g. "exportimage_*_um.png"
+# Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"
 
-# Keep SNxxx folder hierarchy in output?
-ORGANIZE_BY_PARENT = True
+# Keep sub-folder hierarchy in output? If INPUT directory contains subfolders, sort by subfolder name?
+ORGANIZE_BY_SUB = True
 
 # Patch controls
 PATCH_SIZE = 256          # square crop (pixels) around each slant center
 MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
-SAVE_PER_IMAGE_MANIFEST = True
 
 # MTF controls
-FRACTION = 0.5            # 0.5 = MTF50
-WRITE_FIGURES = True
-SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE
+FRACTION = 0.5            # 0.5 = MTF50 (what fraction of MTF to report)
+WRITE_FIGURES = True      # save MTF plot per patch? 
+SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 # -------------- END CONFIG --------------------------
 
 
@@ -95,7 +94,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
     src_stem = src_path.stem
 
     # keep SNxxx hierarchy if enabled
-    if ORGANIZE_BY_PARENT:
+    if ORGANIZE_BY_SUB:
         parent_name = src_path.parent.name  # e.g., SN005
         img_out_dir = base_out / parent_name / src_stem
     else:

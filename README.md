@@ -9,9 +9,9 @@ The workflow extracts **patches** from input images, runs an MTF calculation per
 
 ```
 repo/
-├─ MTF_HD.py              # Core ESF → LSF → MTF analysis
 ├─ hypertarget.py         # Finds slant-edge patch centers
-├─ run_mtf.py             # Runner: slices images, calls hypertarget + MTF, writes CSV
+├─ MTF_HD.py              # Core ESF → LSF → MTF analysis
+├─ run_mtf.py             # Runner: calls hypertarget and slices images, calls MTF_HD for analysis, writes CSV
 └─ outputs/               # Created at runtime (patches, plots, summary CSV)
 ```
 
@@ -28,7 +28,7 @@ source .venv/bin/activate
 
 # install all dependencies
 pip install -r requirements.txt
-
+```
 
 ## Workflow
 
@@ -36,25 +36,28 @@ pip install -r requirements.txt
    `hypertarget.py` locates slant-edge fields in each image (or defaults to center if none found).
 
 2. **Patch cropping**  
-   Patches (e.g., 256×256) are cropped and saved under `outputs/…`.
+   Patches (e.g., 256×256 .png file) are cropped and saved under `outputs/…`.
 
 3. **MTF analysis**  
    - ESF is built and **centered at 50% level**.  
    - Differentiated → LSF, smoothed, windowed (Kaiser).  
    - FFT → MTF curve, reporting:  
-     - **MTF50 frequency**  
-     - **MTF@Nyquist (0.5 normalized)**  
-     - Edge angle, width, contrast.
+     - **MTF(fraction) frequency**  
+     - **MTF@Nyquist (0.5 normalized)**
+     - Edge angle and profile, width, contrast, image size, angle.
 
 4. **Results**  
    - Per-image: MTF plots: for each patch, a figure is saved showing the ESF, LSF, and MTF curve (if WRITE_FIGURES = True).
+   - Edge angle and profile, width, contrast, image size, angle, and angle are printed within the plots
    - Cropped patch images themselves (saved as PNG).
-   - Global: `mtf_summary_all.csv` (all patches across all images).
+   - Global: `mtf_summary_all.csv` (all information for all patches across all images).
 
 ---
 
 ## Configuration
 
+Firstly, have everything necessary installed to your environment.
+Have the run_mtf, MTF_HD, and Hypertargeting all downloaded. 
 Open **`run_mtf.py`** and edit the config block at the top:
 
 ```python
@@ -65,15 +68,20 @@ PATCH_OUT_BASE = r"/path/to/outputs"
 MTF_MODULE_PATH = r"/path/to/MTF_HD.py"
 HYPER_MODULE_PATH = r"/path/to/hypertarget.py"
 
-FILENAME_GLOB = "*.png"         # image pattern
-ORGANIZE_BY_PARENT = True       # keep SNxxx folder hierarchy
+# Uploaded images must be in .PNG format
+FILENAME_GLOB = "*.png"
 
-PATCH_SIZE = 256                # patch size (pixels)
-MAX_PATCHES = None              # limit patches per image; None = all
+# Keep sub-folder hierarchy in output? If INPUT directory contains subfolders, sort by subfolder name?
+ORGANIZE_BY_SUB = True
 
-FRACTION = 0.5                  # 0.5 = MTF50
-WRITE_FIGURES = True
-SUMMARY_CSV = "mtf_summary_all.csv"
+# Patch controls
+PATCH_SIZE = 256          # square crop (pixels) around each slant center
+MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
+
+# MTF controls
+FRACTION = 0.5            # 0.5 = MTF50 (what fraction of MTF to report)
+WRITE_FIGURES = True      # save MTF plot per patch? 
+SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 # -----------------------------------------------------
 ```
 

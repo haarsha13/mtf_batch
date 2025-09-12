@@ -56,15 +56,15 @@ class Verbosity(Enum): # output types/level of output
 
 @dataclass
 class MTFReport:
-    filename: str
-    image_w: int
-    image_h: int
-    edge_profile: str
-    angle_deg: float
-    width_px: float
-    threshold: float
-    contrast: float
-    mtf_fraction: float
+    filename: str                    # source image filename
+    image_w: int                     # image dimension width (pixels)    
+    image_h: int                     # image dimension height (pixels)
+    edge_profile: str                # "Vertical" or "Horizontal"
+    angle_deg: float                 # edge angle in degrees
+    width_px: float                  # pixel transition size
+    threshold: float                 # threshold used for ESF/MTF
+    contrast: float                  # Michelson contrast (0..1 scale)
+    mtf_fraction: float              # fraction of MTF to report (e.g. 0.5 for MTF50)
     mtf50_freq: float | None         # frequency (normalized) where MTF crosses `mtf_fraction`
     mtf_at_nyquist: float            # MTF value at 0.5 (0..1 scale)
     nyquist_frequency: float         # always 0.5 (normalized)
@@ -92,7 +92,7 @@ class Transform:
       return 0.0
     edgePoly = np.polyfit(line[:,1], line[:,0], 1)
     angle = math.degrees(math.atan(-edgePoly[0]))
-    return float(angle)
+    return float(angle) 
 
   @staticmethod
   def _otsu_threshold01(gray):
@@ -379,10 +379,6 @@ class MTF:
     lsfDivisor = np.diff(ESF.x)
 
     lsfValues = np.divide(lsfDividend, lsfDivisor)
-
-    # Calculate the distances for the LSF as midpoints between ESF x values
-    #lsfDistances = 0.5*(ESF.x[:-1] + ESF.x[1:])
-
     lsfDistances = ESF.x[0:-1]
 
     if normalize:
@@ -492,9 +488,7 @@ class MTF:
         ax2.grid(True)
         ax2.minorticks_on()
 
-        ax3.plot(lsf.x, lsf.y, label='No_Window', alpha = 0.7)
-        ax3.plot(lsf.x, windowed_y, label='Blackman_Window', alpha = 0.7)
-        ax3.plot(lsf.x, window, label='Window', alpha = 0.7)
+        ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
         ax3.grid(True)
@@ -567,5 +561,3 @@ class MTF:
             fig = plt.gcf()
     
         return rep, fig
-
-

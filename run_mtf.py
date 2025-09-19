@@ -121,6 +121,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
 
     name = src_path.name
     split_path = name.split("_")
+    print(split_path[2])
     depth = split_path[2]
   
 
@@ -166,9 +167,10 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
                 verbose=verbosity,
                 filename=patch_name
             )
-        except TypeError:
-            # in case your MTF.run signature differs
-            rep, fig = rs_mtf.MTF.run(patch, FRACTION)
+
+        except Exception as e:
+            print(f"[WARN] MTF failed on {patch_name}: {e}")
+            rep, fig = None, None
 
         # save figure if present
         fig_path = None
@@ -231,8 +233,22 @@ def main():
 
     if all_rows:
         summary_csv = out_base / SUMMARY_CSV
-        pd.DataFrame(all_rows).to_csv(summary_csv, index=False)
+        dat_all = pd.DataFrame(all_rows)
+        dat_all.to_csv(summary_csv, index=False)
         print(f"\nSummary CSV → {summary_csv}")
+
+    
+        cleanDat_all = dat_all.dropna()
+        cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] > 0]
+        cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] < 1]
+        plt.plot(cleanDat_all['depth_um'], cleanDat_all['mtf50_freq'], 'o')
+        plt.xlabel('Depth (um)')
+        plt.ylabel('MTF50 (cyc/pixel)')
+        plt.title('MTF50 vs Depth')
+        
+        plt.savefig(out_base / "mtf50_vs_depth.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
 
 if __name__ == "__main__":
     main()

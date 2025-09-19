@@ -401,7 +401,7 @@ class MTF:
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 
-    window = windows.kaiser(N,beta=8)
+    window = windows.kaiser(N,beta=14)
     windowed_y = LSF.y * window
 
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))

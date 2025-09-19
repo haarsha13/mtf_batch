@@ -166,3 +166,69 @@ one_violin_depth_medians_with_minmax(
 #     mtf_min=0,               # set your lower bound
 #     mtf_max=1                 # set your upper bound
 # )
+
+ if all_rows:
+        summary_csv = out_base / SUMMARY_CSV
+        dat_all = pd.DataFrame(all_rows)
+        dat_all.to_csv(summary_csv, index=False)
+        print(f"\nSummary CSV → {summary_csv}")
+
+
+        # --- Clean + filter band to avoid extremes ---
+        mtf_min, mtf_max = 0.05, 0.90  # adjust as needed
+        clean = dat_all.dropna(subset=['depth_um', 'mtf50_freq']).copy()
+        clean = clean[(clean['mtf50_freq'] > 0) & (clean['mtf50_freq'] < 1)]
+        clean = clean[clean['mtf50_freq'].between(mtf_min, mtf_max)]
+
+        # Ensure depth is numeric (no harm if already numeric)
+        clean['depth'] = pd.to_numeric(clean['depth_um'], errors='coerce')
+        clean = clean.dropna(subset=['depth_um'])
+
+        # --- Sorted unique depths ---
+        depths_sorted = np.sort(clean['depth_um'].unique())
+
+        # --- Build distributions: ALL rows per depth (no per-location averaging) ---
+        data_by_depth = [
+            clean.loc[clean['depth'] == d, 'mtf50_freq'].values
+            for d in depths_sorted
+        ]
+        # Filter out empty arrays and their corresponding depths
+        nonempty = [(d, arr) for d, arr in zip(depths_sorted, data_by_depth) if len(arr) > 0]
+        if not nonempty:
+            print("No data to plot for violin plot.")
+            return
+        depths_sorted, data_by_depth = zip(*nonempty)
+
+        # --- Per-depth stats (median, min, max) for overlays ---
+        stats = (
+            clean.groupby('depth_um')['mtf50_freq']
+                .agg(median='median', min='min', max='max', n='count')
+                .reindex(depths_sorted)
+                .reset_index()
+        )
+
+        # --- Plot: violins + median marker + min–max bars ---
+        fig, ax = plt.subplots(figsize=(9, 5))
+        ax.violinplot(
+            data_by_depth,
+            showmeans=False,
+            showmedians=False,
+            showextrema=False
+        )
+
+        xs = np.arange(1, len(depths_sorted) + 1)
+        for i, (_, row) in enumerate(stats.iterrows(), start=1):
+            ax.scatter(i, row['median'], marker='D', s=28, zorder=3, label=None)
+            ax.vlines(i, row['min'], row['max'], linewidth=2, alpha=0.5)
+
+        ax.set_xticks(xs)
+        ax.set_xticklabels([f"{d:g}" for d in depths_sorted])
+        ax.set_xlabel('Depth (µm)')
+        ax.set_ylabel('MTF50 (cyc/pixel)')
+        ax.set_ylim(mtf_min, mtf_max)
+        ax.set_title('MTF50 vs Depth — violins of all rows; median + min–max per depth')
+
+        ax.grid(True, axis='y', linestyle='--', alpha=0.4)
+        plt.tight_layout()
+        plt.savefig(out_base / "mtf50_vs_depth_violin.png", dpi=300, bbox_inches="tight")
+        plt.close()

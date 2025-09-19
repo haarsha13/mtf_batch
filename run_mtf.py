@@ -18,7 +18,7 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/test_image"
 
 # Where to write patches and results:
 PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_ThroughFocus"
@@ -247,6 +247,50 @@ def main():
         plt.title('MTF50 vs Depth')
         
         plt.savefig(out_base / "mtf50_vs_depth.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+    # --- Per-depth stats + data (aligned) ---
+    depths, data_by_depth = [], []
+    for dep, grp in cleanDat_all.groupby('depth_um', sort=True):
+        arr = grp['mtf50_freq'].dropna().values
+        if arr.size:                 # skip empty groups
+            depths.append(dep)
+            data_by_depth.append(arr)
+
+    if not data_by_depth:
+        print("No data to plot for violin plot.")
+    else:
+        stats = (
+            cleanDat_all[cleanDat_all['depth_um'].isin(depths)]
+            .groupby('depth_um')['mtf50_freq']
+            .agg(median='median', min='min', max='max')
+            .reindex(depths)
+        )
+
+        # --- Plot: one violin per depth + min–max bars ---
+        fig, ax = plt.subplots(figsize=(9, 5))
+        ax.violinplot(
+            data_by_depth,
+            showmedians=True,   # median line per depth
+            showmeans=False,
+            showextrema=False
+        )
+
+        xs = np.arange(1, len(depths) + 1)
+        for i, dep in enumerate(depths, start=1):
+            lo, hi = stats.loc[dep, 'min'], stats.loc[dep, 'max']
+            ax.vlines(i, lo, hi, linewidth=2, alpha=0.5)  # min–max bar
+
+        ax.set_xticks(xs)
+        ax.set_xticklabels([str(d) for d in depths])
+        ax.set_xlabel('Depth (µm)')
+        ax.set_ylabel('MTF50 (cyc/pixel)')
+        #ax.set_ylim(0, 0.5)
+        ax.set_title('MTF50 by Depth — violin (median) with min–max bars')
+        ax.grid(True, axis='y', linestyle='--', alpha=0.4)
+
+        plt.tight_layout()
+        plt.savefig(out_base / "mtf50_vs_depth_violin.png", dpi=300, bbox_inches="tight")
         plt.close()
 
 

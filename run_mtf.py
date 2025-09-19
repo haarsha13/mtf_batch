@@ -19,7 +19,7 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/test_image/"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus"
 
 # Where to write patches and results:
 PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_ThroughFocus"
@@ -205,9 +205,9 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
       pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
-def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0):
+def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0, edge_profile_col='edge_profile'):
     """Minimal cleaning for plots."""
-    d = df.dropna(subset=[depth_col, mtf_col]).copy()
+    d = df.dropna(subset=[depth_col, mtf_col, edge_profile_col]).copy()
     d = d[(d[mtf_col] > 0) & (d[mtf_col] < 1)]
     d = d[d[mtf_col].between(y_lo, y_hi)]
     return d
@@ -223,9 +223,9 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
         print("No data to plot for scatter.")
         return
     plt.figure()
-    plt.plot(d[depth_col], d[mtf_col], '.', markersize=4)
-    plt.xlabel('Depth (µm)')
-    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.scatter(d[depth_col], d[mtf_col], alpha=0.6, s=10, c='blue', edgecolors='none')
+    plt.xlabel('Depth (µm)', fontsize=2)
+    plt.ylabel('MTF50 (cyc/pixel)', fontsize=2)
     #plt.ylim(y_lo, y_hi)
     plt.xticks(rotation='vertical') 
     plt.title('MTF50 vs Depth')
@@ -237,21 +237,33 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
 def plot_mtf50_violin_by_depth(df: pd.DataFrame, out_base: Path,
                                depth_col: str = 'depth_um',
                                mtf_col: str = 'mtf50_freq',
+                               edge_profile_col: str = 'edge_profile',
                                y_lo: float = 0.0, y_hi: float = 1.0,
                                outfile: str = "mtf50_vs_depth_violin.png"):
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
+    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi, edge_profile_col)
     if d.empty:
         print("No data to plot for violin.")
         return
 
     plt.figure()
     # --- one-line seaborn violin ---
-    sns.violinplot(data=d, x=depth_col, y=mtf_col, cut=0, inner="quartile", palette="viridis")
+
+    sns.violinplot(
+        data=d, x=depth_col, y=mtf_col, hue=edge_profile_col,
+        cut=0, inner="quartile", palette=["#2ca02c", "#ffeb3b"], split=True, gap=0.1
+    )
+    plt.legend(title="Edge Profile")
     # --------------------------------
 
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
-    plt.ylim(y_lo, y_hi)
+    plt.xticks(rotation='vertical') 
+    plt.xlabel('Depth (µm)', fontsize=2)
+    # plt.ylim(y_lo, y_hi)
+
+    # Filter data for x-axis limits before plotting
+    d = d[(d[depth_col] >= 180) & (d[depth_col] <= 300)]
+    plt.xlim(170, 310)
     plt.title('MTF50 by Depth — violin (quartiles shown)')
     plt.grid(True, axis='y', linestyle='--', alpha=0.4)
     plt.tight_layout()

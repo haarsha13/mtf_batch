@@ -56,7 +56,7 @@ def _load_module_from_path(path_str: str, required=()):
     assert spec and spec.loader
     spec.loader.exec_module(mod)   # type: ignore[attr-defined]
     for name in required:
-        if not hasattr(mod, name):
+        if not hasattr(mod, name): #Must have the required attribute/class in the code e.g. class MTF, class HyperTarget
             raise AttributeError(f"Loaded '{p.name}' but missing attribute: {name}")
     return mod
 
@@ -94,7 +94,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
     rows: list[dict] = []
     src_stem = src_path.stem
 
-    # keep SNxxx hierarchy if enabled
+    # keep name hierarchy if enabled
     if ORGANIZE_BY_SUB:
         parent_name = src_path.parent.name  # e.g., SN005
         img_out_dir = base_out / parent_name / src_stem
@@ -120,15 +120,15 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
     }
 
     name = src_path.name
-    split_path = name.split("_")
+    split_path = name.split("_") #Assumes filename format is (SN001_10x_100_um.png or SN001_10x_100um.png)
     print(split_path[2])
     depth = split_path[2]
   
 
     with open(img_out_dir / "hypertarget_meta.json", "w") as f:
-        json.dump(meta, f, indent=2)
+        json.dump(meta, f, indent=2) #Save metadata for each image as another json file
 
-    if centers is None or len(centers) == 0:
+    if centers is None or len(centers) == 0: #In the case that no slant centers are found, run MTF on the full image
         print(f"[WARN] No slant centers found in {src_path.name} — running MTF on full frame.")
         centers = np.array([[arr.shape[1]//2, arr.shape[0]//2]], dtype=int)
 
@@ -160,7 +160,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
         except Exception:
             verbosity = 0
 
-        try:
+        try: #Try to run MTF, if it fails, catch the error and continue
             rep, fig = rs_mtf.MTF.run(
                 patch, FRACTION,
                 plot=WRITE_FIGURES,
@@ -168,7 +168,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
                 filename=patch_name
             )
 
-        except Exception as e:
+        except Exception as e: #Fail gracefully and give nan values for failed patches
             print(f"[WARN] MTF failed on {patch_name}: {e}")
             rep, fig = None, None
 
@@ -183,7 +183,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
         def _get(obj, name, default=None):
             return getattr(obj, name, default)
 
-        rows.append({
+        rows.append({ # one row per patch
             "source_image": src_path.name,
             "depth_um": depth,
             "x_pix": int(cxy[0]),
@@ -200,36 +200,36 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
         })
 
 
-    if SAVE_PER_IMAGE_MANIFEST:
+    if SAVE_PER_IMAGE_MANIFEST: #If enabled, save the patch centers for each image as a csv file
       pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
 
 def main():
     # load modules
-    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",))
-    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
+    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",)) #Module must have MTF class
+    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",)) #Module must have HyperTarget class
 
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)
-    out_base.mkdir(parents=True, exist_ok=True)
+    out_base.mkdir(parents=True, exist_ok=True) #Make sure an output base folder exists
 
-    files = _collect_images(in_path, FILENAME_GLOB)
+    files = _collect_images(in_path, FILENAME_GLOB) #Recursively collect all images matching the glob pattern
     if not files:
         print(f"No files matched {FILENAME_GLOB!r} under: {in_path}")
         sys.exit(0)
 
-    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}")
+    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}") # Says how many images found in folder sub-folder
 
-    all_rows: list[dict] = []
-    for f in files:
+    all_rows: list[dict] = [] #List to collect dictionaries for final summary csv
+    for f in files: #For each image file globbed
         try:
-            print(f" → {f}")
-            rows = process_image(rs_mtf, rs_hyp, f, out_base)
-            all_rows.extend(rows)
+            print(f" → {f}") #Print the file being processed
+            rows = process_image(rs_mtf, rs_hyp, f, out_base) #Process the image and get list of dictionaries for each patch
+            all_rows.extend(rows) #Add the dictionaries to the all_rows list
         except Exception as e:
-            print(f"[ERROR] {f.name}: {e}")
-            traceback.print_exc()
+            print(f"[ERROR] {f.name}: {e}") #Catch any error and continue processing other images
+            traceback.print_exc() #Print the full traceback for debugging
 
     if all_rows:
         summary_csv = out_base / SUMMARY_CSV
@@ -237,17 +237,16 @@ def main():
         dat_all.to_csv(summary_csv, index=False)
         print(f"\nSummary CSV → {summary_csv}")
 
+    cleanDat_all = dat_all.dropna() #Clean data for plotting, removing rows with NaN values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] > 0] #Remove rows with non-positive MTF50 values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] < 1] #Remove rows with MTF50 values >= 1 (assuming pixel units)
+    plt.plot(cleanDat_all['depth_um'], cleanDat_all['mtf50_freq'], '.') 
+    plt.xlabel('Depth (um)')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 vs Depth')
     
-        cleanDat_all = dat_all.dropna()
-        cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] > 0]
-        cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] < 1]
-        plt.plot(cleanDat_all['depth_um'], cleanDat_all['mtf50_freq'], 'o')
-        plt.xlabel('Depth (um)')
-        plt.ylabel('MTF50 (cyc/pixel)')
-        plt.title('MTF50 vs Depth')
-        
-        plt.savefig(out_base / "mtf50_vs_depth.png", dpi=300, bbox_inches="tight")
-        plt.close()
+    plt.savefig(out_base / "mtf50_vs_depth.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
     # --- Per-depth stats + data (aligned) ---
     depths, data_by_depth = [], []

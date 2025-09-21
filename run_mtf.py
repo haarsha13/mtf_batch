@@ -205,120 +205,68 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
       pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
-def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0, edge_profile_col='edge_profile'):
-    """Minimal cleaning for plots."""
-    d = df.dropna(subset=[depth_col, mtf_col, edge_profile_col]).copy()
-    d = d[(d[mtf_col] > 0) & (d[mtf_col] < 1)]
-    d = d[d[mtf_col].between(y_lo, y_hi)]
-    return d
-
-def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
-                        depth_col: str = 'depth_um',
-                        mtf_col: str = 'mtf50_freq',
-                        y_lo: float = 0.0, y_hi: float = 1.0,
-                        outfile: str = "mtf50_vs_depth.png"):
-    """Scatter: all points (after simple clean/filter)."""
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
-    if d.empty:
-        print("No data to plot for scatter.")
-        return
-    plt.figure()
-    plt.scatter(d[depth_col], d[mtf_col], alpha=0.6, s=10, c='blue', edgecolors='none')
-    plt.xlabel('Depth (µm)', fontsize=2)
-    plt.ylabel('MTF50 (cyc/pixel)', fontsize=2)
-    #plt.ylim(y_lo, y_hi)
-    plt.xticks(rotation='vertical') 
-    plt.title('MTF50 vs Depth')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
-    plt.tight_layout()
-    plt.savefig(out_base / outfile, dpi=300, bbox_inches="tight")
-    plt.close()
-
-def plot_mtf50_violin_by_depth(df: pd.DataFrame, out_base: Path,
-                               depth_col: str = 'depth_um',
-                               mtf_col: str = 'mtf50_freq',
-                               edge_profile_col: str = 'edge_profile',
-                               y_lo: float = 0.0, y_hi: float = 1.0,
-                               outfile: str = "mtf50_vs_depth_violin.png"):
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi, edge_profile_col)
-    if d.empty:
-        print("No data to plot for violin.")
-        return
-
-    plt.figure()
-    # --- one-line seaborn violin ---
-
-    sns.violinplot(
-        data=d, x=depth_col, y=mtf_col, hue=edge_profile_col,
-        cut=0, inner="quartile", palette=["#2ca02c", "#ffeb3b"], split=True, gap=0.1
-    )
-    plt.legend(title="Edge Profile")
-    # --------------------------------
-
-    plt.xlabel('Depth (µm)')
-    plt.ylabel('MTF50 (cyc/pixel)')
-    plt.xticks(rotation='vertical') 
-    plt.xlabel('Depth (µm)', fontsize=2)
-    # plt.ylim(y_lo, y_hi)
-
-    # Filter data for x-axis limits before plotting
-    d = d[(d[depth_col] >= 180) & (d[depth_col] <= 300)]
-    plt.xlim(170, 310)
-    plt.title('MTF50 by Depth — violin (quartiles shown)')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
-    plt.tight_layout()
-    plt.savefig(out_base / outfile, dpi=300, bbox_inches="tight")
-    plt.close()
 
 def main():
-    # Load modules
-    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",))
-    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
+    # load modules
+    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",)) #Module must have MTF class
+    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",)) #Module must have HyperTarget class
 
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)
-    out_base.mkdir(parents=True, exist_ok=True)
+    out_base.mkdir(parents=True, exist_ok=True) #Make sure an output base folder exists
 
-    # Gather input images
-    files = _collect_images(in_path, FILENAME_GLOB)
+    files = _collect_images(in_path, FILENAME_GLOB) #Recursively collect all images matching the glob pattern
     if not files:
         print(f"No files matched {FILENAME_GLOB!r} under: {in_path}")
-        return
+        sys.exit(0)
 
-    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}")
+    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}") # Says how many images found in folder sub-folder
 
-    # Process all images → patches → MTF
-    all_rows: list[dict] = []
-    for f in files:
+    all_rows: list[dict] = [] #List to collect dictionaries for final summary csv
+    for f in files: #For each image file globbed
         try:
-            print(f" → {f}")
-            rows = process_image(rs_mtf, rs_hyp, f, out_base)
-            all_rows.extend(rows)
+            print(f" → {f}") #Print the file being processed
+            rows = process_image(rs_mtf, rs_hyp, f, out_base) #Process the image and get list of dictionaries for each patch
+            all_rows.extend(rows) #Add the dictionaries to the all_rows list
         except Exception as e:
-            print(f"[ERROR] {f.name}: {e}")
-            traceback.print_exc()
+            print(f"[ERROR] {f.name}: {e}") #Catch any error and continue processing other images
+            traceback.print_exc() #Print the full traceback for debugging
 
-    if not all_rows:
-        print("No rows produced; nothing to save or plot.")
-        return
+    if all_rows:
+        summary_csv = out_base / SUMMARY_CSV
+        dat_all = pd.DataFrame(all_rows)
+        dat_all.to_csv(summary_csv, index=False)
+        print(f"\nSummary CSV → {summary_csv}")
 
-    # Save summary CSV
-    summary_csv = out_base / SUMMARY_CSV
-    dat_all = pd.DataFrame(all_rows)
-    dat_all.to_csv(summary_csv, index=False)
-    print(f"\nSummary CSV → {summary_csv}")
+    cleanDat_all = dat_all.dropna() #Clean data for plotting, removing rows with NaN values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] > 0] #Remove rows with non-positive MTF50 values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] < 1] #Remove rows with MTF50 values >= 1 (assuming pixel units)
+    
+    plt.scatter(cleanDat_all['depth_um'], cleanDat_all['mtf50_freq'])
+    plt.xlabel('Depth (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 vs Depth')
+    plt.savefig(out_base / "mtf50_vs_depth_plot.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
-    # Plots (from the in-memory DataFrame)
-    plot_mtf50_vs_depth(
-        dat_all, out_base,
-        depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=1.0, outfile="mtf50_vs_depth.png"
-    )
-    plot_mtf50_violin_by_depth(
-        dat_all, out_base,
-        depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=1.0, outfile="mtf50_vs_depth_violin.png"
-    )
+    sns.violinplot(x='depth_um', y='mtf50_freq', hue = 'edge_profile', data=cleanDat_all, palette="coolwarm")
+    plt.xlabel('Depths (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 fraction for each Depth Including Medians')
+    plt.savefig(out_base / "mtf50_vs_depth_separated_violin.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    sns.violinplot(x='depth_um', y='mtf50_freq', hue = 'edge_profile', data=cleanDat_all, palette="coolwarm", split=True, gap=.05, inner_kws={"box_width": 0.2} )
+    plt.xlabel('Depths (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 fraction for each Depth Including Medians')
+    plt.savefig(out_base / "mtf50_vs_depth_separated_violin_split.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
 if __name__ == "__main__":
     main()
+
+

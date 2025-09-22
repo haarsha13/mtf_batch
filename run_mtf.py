@@ -270,7 +270,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
     # --- (1) all depths ---
     # Define order for x-axis based on unique depth values
     order = d[depth_col].astype(str).drop_duplicates().tolist()
-    plt.figure()
+    plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="quartile", scale="width", bw=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
     xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 50 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 50 == 0)]
@@ -304,7 +304,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
         d_zoom = d[d[depth_col].astype(str) == str(top_depth)]
         order = None
 
-    plt.figure()
+    plt.figure(figsize=(max(6, len(np.unique(d_zoom[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d_zoom, x=depth_col, y=mtf_col, order=order, cut=0)
     plt.axhline(top_median, ls="--", lw=1)
     plt.ylim(y_lo, y_hi)

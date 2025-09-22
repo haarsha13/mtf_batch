@@ -209,6 +209,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
       pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
+<<<<<<< HEAD
 def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0, edge_profile_col='edge_profile'):
     """Minimal cleaning for plots."""
     d = df.dropna(subset=[depth_col, mtf_col, edge_profile_col]).copy()
@@ -285,6 +286,13 @@ def plot_mtf50_violins_with_topmedian_zoom(
     top_sigma = float(d.loc[d[depth_col] == top_depth, mtf_col].std(ddof=1))
     if not np.isfinite(top_sigma) or top_sigma == 0:
         top_sigma = float(d[mtf_col].std(ddof=1)) or 0.05
+=======
+
+def main():
+    # load modules
+    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",)) #Module must have MTF class
+    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",)) #Module must have HyperTarget class
+>>>>>>> f83e6ed6392dcf7a560386a21eafe5237c1617e0
 
     half_sd = 0.5 * top_sigma
     band_lo = max(y_lo, top_median - half_sd)
@@ -322,8 +330,9 @@ def plot_mtf50_violins_with_topmedian_zoom(
 def main():
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)
-    out_base.mkdir(parents=True, exist_ok=True)
+    out_base.mkdir(parents=True, exist_ok=True) #Make sure an output base folder exists
 
+<<<<<<< HEAD
     # Where to read/write the summary CSV
     summary_csv = Path(CSV_OVERRIDE_PATH) if CSV_OVERRIDE_PATH else (out_base / SUMMARY_CSV)
 
@@ -356,26 +365,42 @@ def main():
     rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
 
     files = _collect_images(in_path, FILENAME_GLOB)
+=======
+    files = _collect_images(in_path, FILENAME_GLOB) #Recursively collect all images matching the glob pattern
+>>>>>>> f83e6ed6392dcf7a560386a21eafe5237c1617e0
     if not files:
         print(f"No files matched {FILENAME_GLOB!r} under: {in_path}")
-        return
+        sys.exit(0)
 
-    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}")
+    print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}") # Says how many images found in folder sub-folder
 
+<<<<<<< HEAD
     all_rows: list[dict] = []
     for f in files:
+=======
+    all_rows: list[dict] = [] #List to collect dictionaries for final summary csv
+    for f in files: #For each image file globbed
+>>>>>>> f83e6ed6392dcf7a560386a21eafe5237c1617e0
         try:
-            print(f" → {f}")
-            rows = process_image(rs_mtf, rs_hyp, f, out_base)
-            all_rows.extend(rows)
+            print(f" → {f}") #Print the file being processed
+            rows = process_image(rs_mtf, rs_hyp, f, out_base) #Process the image and get list of dictionaries for each patch
+            all_rows.extend(rows) #Add the dictionaries to the all_rows list
         except Exception as e:
+<<<<<<< HEAD
             print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
+=======
+            print(f"[ERROR] {f.name}: {e}") #Catch any error and continue processing other images
+            traceback.print_exc() #Print the full traceback for debugging
+>>>>>>> f83e6ed6392dcf7a560386a21eafe5237c1617e0
 
-    if not all_rows:
-        print("No rows produced; nothing to save or plot.")
-        return
+    if all_rows:
+        summary_csv = out_base / SUMMARY_CSV
+        dat_all = pd.DataFrame(all_rows)
+        dat_all.to_csv(summary_csv, index=False)
+        print(f"\nSummary CSV → {summary_csv}")
 
+<<<<<<< HEAD
     dat_all = pd.DataFrame(all_rows)
     dat_all.to_csv(summary_csv, index=False)
     print(f"\nSummary CSV → {summary_csv}")
@@ -393,8 +418,39 @@ def main():
         all_outfile="mtf50_violin_all.png",
         zoom_outfile="mtf50_violin_zoom_topmedian.png"
     )
+=======
+    cleanDat_all = dat_all.dropna() #Clean data for plotting, removing rows with NaN values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] > 0] #Remove rows with non-positive MTF50 values
+    cleanDat_all = cleanDat_all[cleanDat_all['mtf50_freq'] < 1] #Remove rows with MTF50 values >= 1 (assuming pixel units)
+    
+    plt.scatter(cleanDat_all['depth_um'], cleanDat_all['mtf50_freq'])
+    plt.xlabel('Depth (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 vs Depth')
+    plt.savefig(out_base / "mtf50_vs_depth_plot.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    sns.violinplot(x='depth_um', y='mtf50_freq', hue = 'edge_profile', data=cleanDat_all, palette="coolwarm")
+    plt.xlabel('Depths (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 fraction for each Depth Including Medians')
+    plt.savefig(out_base / "mtf50_vs_depth_separated_violin.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    sns.violinplot(x='depth_um', y='mtf50_freq', hue = 'edge_profile', data=cleanDat_all, palette="coolwarm", split=True, gap=.05, inner_kws={"box_width": 0.2} )
+    plt.xlabel('Depths (um)')
+    plt.xticks(rotation = 'vertical')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title('MTF50 fraction for each Depth Including Medians')
+    plt.savefig(out_base / "mtf50_vs_depth_separated_violin_split.png", dpi=300, bbox_inches="tight")
+    plt.close()
+>>>>>>> f83e6ed6392dcf7a560386a21eafe5237c1617e0
 
 
 
 if __name__ == "__main__":
     main()
+
+

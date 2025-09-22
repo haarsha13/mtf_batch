@@ -19,10 +19,10 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SNO10_420mm"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/SN006_results4"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_final_results"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
@@ -45,8 +45,8 @@ WRITE_FIGURES = True      # save MTF plot per patch?
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 
 # --- quick runner toggle ---
-USE_EXISTING_CSV = True   # True => read CSV and only make plots; False => run full pipeline
-CSV_OVERRIDE_PATH =  r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_results/mtf_summary_all.csv" # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
+USE_EXISTING_CSV = False # True => read CSV and only make plots; False => run full pipeline
+CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
 
 
@@ -238,9 +238,9 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.figure()  # <-- default size
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)]
+    xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
+    ax.set_xticklabels([str(int(round(v))) for v in order if abs(v - round(v/20)*20) < 1e-9], rotation=90)
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
     plt.title('MTF50 vs Depth')
@@ -315,6 +315,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.tight_layout()
     plt.savefig(out_base / zoom_outfile, dpi=800, bbox_inches="tight")
     plt.close()
+
 
 
 def main():
@@ -392,6 +393,8 @@ def main():
     depth_col="depth_um", mtf_col="mtf50_freq",
     y_lo=0.0, y_hi=0.5, depth_window=50.0
     )
+
+
 
 
 

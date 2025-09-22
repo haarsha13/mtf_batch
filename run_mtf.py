@@ -22,7 +22,7 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/SN006_results3"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/SN006_results4"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
@@ -237,86 +237,83 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
 
     plt.figure()  # <-- default size
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
-    plt.xticks(ticks=np.arange(len(order)), labels=order, rotation=90)
+    ax = plt.gca()
+    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 50 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 50 == 0)]
+    ax.set_xticks(xtick_indices)
+    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
-    plt.ylim(y_lo, y_hi)
     plt.title('MTF50 vs Depth')
     plt.grid(True, axis='y', linestyle='--', alpha=0.4)
     plt.tight_layout()
-    plt.savefig(out_base / outfile, dpi=300, bbox_inches="tight")
+    plt.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close()
+
+
 
 
 def plot_mtf50_violins_with_topmedian_zoom(
     df: pd.DataFrame, out_base: Path,
-    depth_col: str = 'depth_um',
-    mtf_col: str = 'mtf50_freq',
+    depth_col: str = "depth_um",
+    mtf_col: str = "mtf50_freq",
     y_lo: float = 0.0, y_hi: float = 1.0,
     all_outfile: str = "mtf50_violin_all.png",
-    zoom_outfile: str = "mtf50_violin_zoom_topmedian.png"
+    zoom_outfile: str = "mtf50_violin_zoom_topmedian.png",
+    depth_window: float = None
 ):
-    """Two plots: (1) all depths violin, (2) zoomed to ±½σ around the top median.
-       Uses default figsize for both."""
+    # quick clean (assumes your _clean_plot_data exists; otherwise inline similar)
     d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
     if d.empty:
         print("No data to plot.")
         return
 
-    # --- ALL DEPTHS ---
-    order_all = d[depth_col].astype(str).drop_duplicates().tolist()
-    plt.figure()  # <-- default size
-    sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order_all, cut=0, inner="quartile")
-    if len(order_all) > 12:
-        plt.xticks(rotation=90)
-    plt.xlabel('Depth (µm)')
-    plt.ylabel('MTF50 (cyc/pixel)')
-    plt.ylim(y_lo, y_hi)
-    plt.title('MTF50 by Depth — all data')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+    # --- (1) all depths ---
+    # Define order for x-axis based on unique depth values
+    order = d[depth_col].astype(str).drop_duplicates().tolist()
+    plt.figure()
+    sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="quartile", scale="width", bw=0.2, width=0.9, linewidth=1)
+    ax = plt.gca()
+    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 50 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 50 == 0)]
+    ax.set_xticks(xtick_indices)
+    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
     plt.tight_layout()
-    plt.savefig(out_base / all_outfile, dpi=300, bbox_inches="tight")
+    plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
     plt.close()
 
-    # --- find top-median depth ---
+    # --- top-median depth ---
     med = d.groupby(depth_col, sort=False)[mtf_col].median()
     top_depth = med.idxmax()
     top_median = float(med.loc[top_depth])
-    top_sigma = float(d.loc[d[depth_col] == top_depth, mtf_col].std(ddof=1))
-    if not np.isfinite(top_sigma) or top_sigma == 0:
-        top_sigma = float(d[mtf_col].std(ddof=1)) or 0.05
 
-    half_sd = 0.5 * top_sigma
-    band_lo = max(y_lo, top_median - half_sd)
-    band_hi = min(y_hi, top_median + half_sd)
-    if band_hi <= band_lo:
-        band_lo, band_hi = max(y_lo, top_median - 0.05), min(y_hi, top_median + 0.05)
+    # --- (2) zoom selection ---
+    # Set depth_window as 0.2 * top_depth if not provided and top_depth is numeric
+    if depth_window is None:
+        try:
+            depth_window = 0.2 * float(top_depth)
+        except Exception:
+            depth_window = 50  # fallback
 
-    # --- ZOOM: keep only points within ±½σ band and only depths present in that band ---
-    d_zoom = d[d[mtf_col].between(band_lo, band_hi)]
+    if np.issubdtype(d[depth_col].dtype, np.number):
+        d_zoom = d[(d[depth_col] - float(top_depth)).abs() <= depth_window]
+        order = sorted(d_zoom[depth_col].unique())
+    else:
+        d_zoom = d[d[depth_col].astype(str) == str(top_depth)]
+        order = None  # single depth label
+
     if d_zoom.empty:
-        d_zoom = d
-    order_zoom = d_zoom[depth_col].astype(str).drop_duplicates().tolist()
+        d_zoom = d[d[depth_col].astype(str) == str(top_depth)]
+        order = None
 
-    plt.figure()  # <-- default size
-    ax = sns.violinplot(data=d_zoom, x=depth_col, y=mtf_col, order=order_zoom, cut=0, inner="quartile")
-    if len(order_zoom) > 12:
-        plt.xticks(rotation=90)
-
-    ax.axhspan(band_lo, band_hi, alpha=0.10)
-    ax.axhline(top_median, linestyle='--', linewidth=1)
-
-    margin = 0.1 * (band_hi - band_lo) if band_hi > band_lo else 0.02
-    #plt.ylim(max(y_lo, band_lo - margin), min(y_hi, band_hi + margin))
-    plt.xlabel('Depth (µm)')
-    plt.ylabel('MTF50 (cyc/pixel)')
-    plt.title(f"MTF50 violin — zoom around top median @ {top_depth}: {top_median:.3f} ± ½σ")
+    plt.figure()
+    sns.violinplot(data=d_zoom, x=depth_col, y=mtf_col, order=order, cut=0)
+    plt.axhline(top_median, ls="--", lw=1)
+    plt.ylim(y_lo, y_hi)
+    plt.xticks(rotation=90 if (order and len(order) > 12) else 0)
     plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+    plt.title(f"Zoom near top median depth: {top_depth} (MTF50={top_median:.3f})")
     plt.tight_layout()
-    plt.savefig(out_base / zoom_outfile, dpi=300, bbox_inches="tight")
+    plt.savefig(out_base / zoom_outfile, dpi=800, bbox_inches="tight")
     plt.close()
-
-    print(f"Top-median depth: {top_depth} | median={top_median:.4f} | σ_top={top_sigma:.4f} | band=[{band_lo:.4f}, {band_hi:.4f}]")
 
 
 def main():
@@ -388,13 +385,13 @@ def main():
         depth_col='depth_um', mtf_col='mtf50_freq',
         y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
     )
+    
     plot_mtf50_violins_with_topmedian_zoom(
-        dat_all, out_base,
-        depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=0.5,
-        all_outfile="mtf50_violin_all.png",
-        zoom_outfile="mtf50_violin_zoom_topmedian.png"
+    dat_all, out_base,
+    depth_col="depth_um", mtf_col="mtf50_freq",
+    y_lo=0.0, y_hi=0.5, depth_window=50.0
     )
+
 
 
 

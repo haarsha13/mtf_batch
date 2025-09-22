@@ -22,7 +22,7 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_ThroughFocus"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/SN006_results3"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
@@ -43,6 +43,10 @@ SAVE_PER_IMAGE_MANIFEST = True  # save CSV of each patch centers per image?
 FRACTION = 0.5            # 0.5 = MTF50 (what fraction of MTF to report)
 WRITE_FIGURES = True      # save MTF plot per patch? 
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
+
+# --- quick runner toggle ---
+USE_EXISTING_CSV = True   # True => read CSV and only make plots; False => run full pipeline
+CSV_OVERRIDE_PATH =  r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_results/mtf_summary_all.csv" # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
 
 
@@ -212,74 +216,145 @@ def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y
     d = d[d[mtf_col].between(y_lo, y_hi)]
     return d
 
+
+
+
 def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
                         depth_col: str = 'depth_um',
                         mtf_col: str = 'mtf50_freq',
                         y_lo: float = 0.0, y_hi: float = 1.0,
                         outfile: str = "mtf50_vs_depth.png"):
-    """Scatter: all points (after simple clean/filter)."""
+    """Scatter: all points (after simple clean/filter). Uses default figsize."""
     d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
     if d.empty:
         print("No data to plot for scatter.")
         return
-    plt.figure()
-    plt.scatter(d[depth_col], d[mtf_col], alpha=0.6, s=10, c='blue', edgecolors='none')
-    plt.xlabel('Depth (µm)', fontsize=2)
-    plt.ylabel('MTF50 (cyc/pixel)', fontsize=2)
-    #plt.ylim(y_lo, y_hi)
-    plt.xticks(rotation='vertical') 
+
+    # keep first-seen order for category axis
+    order = d[depth_col].astype(str).drop_duplicates().tolist()
+    x_map = {k: i for i, k in enumerate(order)}
+    xs = d[depth_col].astype(str).map(x_map).values
+
+    plt.figure()  # <-- default size
+    plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
+    plt.xticks(ticks=np.arange(len(order)), labels=order, rotation=90)
+    plt.xlabel('Depth (µm)')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.ylim(y_lo, y_hi)
     plt.title('MTF50 vs Depth')
     plt.grid(True, axis='y', linestyle='--', alpha=0.4)
     plt.tight_layout()
     plt.savefig(out_base / outfile, dpi=300, bbox_inches="tight")
     plt.close()
 
-def plot_mtf50_violin_by_depth(df: pd.DataFrame, out_base: Path,
-                               depth_col: str = 'depth_um',
-                               mtf_col: str = 'mtf50_freq',
-                               edge_profile_col: str = 'edge_profile',
-                               y_lo: float = 0.0, y_hi: float = 1.0,
-                               outfile: str = "mtf50_vs_depth_violin.png"):
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi, edge_profile_col)
+
+def plot_mtf50_violins_with_topmedian_zoom(
+    df: pd.DataFrame, out_base: Path,
+    depth_col: str = 'depth_um',
+    mtf_col: str = 'mtf50_freq',
+    y_lo: float = 0.0, y_hi: float = 1.0,
+    all_outfile: str = "mtf50_violin_all.png",
+    zoom_outfile: str = "mtf50_violin_zoom_topmedian.png"
+):
+    """Two plots: (1) all depths violin, (2) zoomed to ±½σ around the top median.
+       Uses default figsize for both."""
+    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
     if d.empty:
-        print("No data to plot for violin.")
+        print("No data to plot.")
         return
 
-    plt.figure()
-    # --- one-line seaborn violin ---
-
-    sns.violinplot(
-        data=d, x=depth_col, y=mtf_col, hue=edge_profile_col,
-        cut=0, inner="quartile", palette=["#2ca02c", "#ffeb3b"], split=True, gap=0.1
-    )
-    plt.legend(title="Edge Profile")
-    # --------------------------------
-
+    # --- ALL DEPTHS ---
+    order_all = d[depth_col].astype(str).drop_duplicates().tolist()
+    plt.figure()  # <-- default size
+    sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order_all, cut=0, inner="quartile")
+    if len(order_all) > 12:
+        plt.xticks(rotation=90)
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
-    plt.xticks(rotation='vertical') 
-    plt.xlabel('Depth (µm)', fontsize=2)
-    # plt.ylim(y_lo, y_hi)
-
-    # Filter data for x-axis limits before plotting
-    d = d[(d[depth_col] >= 180) & (d[depth_col] <= 300)]
-    plt.xlim(170, 310)
-    plt.title('MTF50 by Depth — violin (quartiles shown)')
+    plt.ylim(y_lo, y_hi)
+    plt.title('MTF50 by Depth — all data')
     plt.grid(True, axis='y', linestyle='--', alpha=0.4)
     plt.tight_layout()
-    plt.savefig(out_base / outfile, dpi=300, bbox_inches="tight")
+    plt.savefig(out_base / all_outfile, dpi=300, bbox_inches="tight")
     plt.close()
 
-def main():
-    # Load modules
-    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",))
-    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
+    # --- find top-median depth ---
+    med = d.groupby(depth_col, sort=False)[mtf_col].median()
+    top_depth = med.idxmax()
+    top_median = float(med.loc[top_depth])
+    top_sigma = float(d.loc[d[depth_col] == top_depth, mtf_col].std(ddof=1))
+    if not np.isfinite(top_sigma) or top_sigma == 0:
+        top_sigma = float(d[mtf_col].std(ddof=1)) or 0.05
 
+    half_sd = 0.5 * top_sigma
+    band_lo = max(y_lo, top_median - half_sd)
+    band_hi = min(y_hi, top_median + half_sd)
+    if band_hi <= band_lo:
+        band_lo, band_hi = max(y_lo, top_median - 0.05), min(y_hi, top_median + 0.05)
+
+    # --- ZOOM: keep only points within ±½σ band and only depths present in that band ---
+    d_zoom = d[d[mtf_col].between(band_lo, band_hi)]
+    if d_zoom.empty:
+        d_zoom = d
+    order_zoom = d_zoom[depth_col].astype(str).drop_duplicates().tolist()
+
+    plt.figure()  # <-- default size
+    ax = sns.violinplot(data=d_zoom, x=depth_col, y=mtf_col, order=order_zoom, cut=0, inner="quartile")
+    if len(order_zoom) > 12:
+        plt.xticks(rotation=90)
+
+    ax.axhspan(band_lo, band_hi, alpha=0.10)
+    ax.axhline(top_median, linestyle='--', linewidth=1)
+
+    margin = 0.1 * (band_hi - band_lo) if band_hi > band_lo else 0.02
+    #plt.ylim(max(y_lo, band_lo - margin), min(y_hi, band_hi + margin))
+    plt.xlabel('Depth (µm)')
+    plt.ylabel('MTF50 (cyc/pixel)')
+    plt.title(f"MTF50 violin — zoom around top median @ {top_depth}: {top_median:.3f} ± ½σ")
+    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(out_base / zoom_outfile, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print(f"Top-median depth: {top_depth} | median={top_median:.4f} | σ_top={top_sigma:.4f} | band=[{band_lo:.4f}, {band_hi:.4f}]")
+
+
+def main():
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)
     out_base.mkdir(parents=True, exist_ok=True)
 
-    # Gather input images
+    # Where to read/write the summary CSV
+    summary_csv = Path(CSV_OVERRIDE_PATH) if CSV_OVERRIDE_PATH else (out_base / SUMMARY_CSV)
+
+    # ---------------- PLOTS-ONLY FAST PATH ----------------
+    if USE_EXISTING_CSV:
+        if not summary_csv.exists():
+            print(f"[WARN] Requested plots-only path but CSV not found: {summary_csv}")
+            print("Falling back to full pipeline…")
+        else:
+            print(f"[PLOTS-ONLY] Reading: {summary_csv}")
+            dat_all = pd.read_csv(summary_csv)
+            # Make the figures and stop
+            plot_mtf50_vs_depth(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
+            )
+            plot_mtf50_violins_with_topmedian_zoom(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                y_lo=0.0, y_hi=0.5,
+                all_outfile="mtf50_violin_all.png",
+                zoom_outfile="mtf50_violin_zoom_topmedian.png"
+            )
+            return  # done
+
+    # ---------------- FULL PIPELINE ----------------
+    # Load modules only if we actually need to process images
+    rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",))
+    rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
+
     files = _collect_images(in_path, FILENAME_GLOB)
     if not files:
         print(f"No files matched {FILENAME_GLOB!r} under: {in_path}")
@@ -287,7 +362,6 @@ def main():
 
     print(f"Found {len(files)} image(s). Writing patches & results under: {out_base}")
 
-    # Process all images → patches → MTF
     all_rows: list[dict] = []
     for f in files:
         try:
@@ -295,30 +369,32 @@ def main():
             rows = process_image(rs_mtf, rs_hyp, f, out_base)
             all_rows.extend(rows)
         except Exception as e:
-            print(f"[ERROR] {f.name}: {e}")
+            print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
 
     if not all_rows:
         print("No rows produced; nothing to save or plot.")
         return
 
-    # Save summary CSV
-    summary_csv = out_base / SUMMARY_CSV
     dat_all = pd.DataFrame(all_rows)
     dat_all.to_csv(summary_csv, index=False)
     print(f"\nSummary CSV → {summary_csv}")
 
-    # Plots (from the in-memory DataFrame)
+    # Make plots from the DataFrame we just created
     plot_mtf50_vs_depth(
         dat_all, out_base,
         depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=1.0, outfile="mtf50_vs_depth.png"
+        y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
     )
-    plot_mtf50_violin_by_depth(
+    plot_mtf50_violins_with_topmedian_zoom(
         dat_all, out_base,
         depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=1.0, outfile="mtf50_vs_depth_violin.png"
+        y_lo=0.0, y_hi=0.5,
+        all_outfile="mtf50_violin_all.png",
+        zoom_outfile="mtf50_violin_zoom_topmedian.png"
     )
+
+
 
 if __name__ == "__main__":
     main()

@@ -22,11 +22,11 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_420mm"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_finsl_results"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_final_results"
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_SUPA_LAME.py"
-HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hyperlame.py"
+MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
+HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"
@@ -45,7 +45,7 @@ WRITE_FIGURES = True      # save MTF plot per patch?
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 
 # --- quick runner toggle ---
-USE_EXISTING_CSV = False # True => read CSV and only make plots; False => run full pipeline
+USE_EXISTING_CSV = True # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
 
@@ -347,6 +347,20 @@ def main():
                 all_outfile="mtf50_violin_all.png",
                 zoom_outfile="mtf50_violin_zoom_topmedian.png"
             )
+
+            # Plot a heatmap showing the average MTF50 value at each (x_pix, y_pix) position
+            pivot = dat_all.pivot_table(columns ="x_pix", index="y_pix", values="mtf50_freq")
+            cmap = plt.cm.get_cmap("Paired").copy()
+            cmap.set_bad(cmap(0.0))  # NaNs appear as the same color as value 0
+
+            sns.heatmap(pivot, annot=False, cmap=cmap,
+            cbar_kws={'label': 'MTF50'}, vmin=0, vmax=0.5)
+            plt.xlabel("x_pix")
+            plt.ylabel("y_pix")
+            plt.title("MTF50 vs x_pix and y_pix")
+            plt.tight_layout()
+            plt.savefig(out_base / "mtf50_x_pix_y_pix_heatmap2.png", dpi=800, bbox_inches="tight")
+            plt.close()
             return  # done
 
     # ---------------- FULL PIPELINE ----------------

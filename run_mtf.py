@@ -22,11 +22,11 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_420mm"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_final_results"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_finsl_results"
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
-HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
+MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_SUPA_LAME.py"
+HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hyperlame.py"
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"
@@ -217,8 +217,6 @@ def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y
     return d
 
 
-
-
 def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
                         depth_col: str = 'depth_um',
                         mtf_col: str = 'mtf50_freq',
@@ -231,25 +229,34 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
         return
 
     # keep first-seen order for category axis
-    order = d[depth_col].astype(str).drop_duplicates().tolist()
+    order = d[depth_col].drop_duplicates().tolist()
     x_map = {k: i for i, k in enumerate(order)}
-    xs = d[depth_col].astype(str).map(x_map).values
+    xs = d[depth_col].map(x_map).values
 
     plt.figure()  # <-- default size
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.strip().lstrip('+-').isdigit() and int(v) % 20 == 0)]
+
+        # order = the exact list of x categories you passed to seaborn (e.g., [-100, -90, ..., 0, 10, ...])
+    # xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9] # positions: keep indices whose value is a multiple of 20 (tolerant to float noise, works for negatives)
+    # ax.set_xticks(xtick_indices)
+    # ax.set_xticklabels([str(int(round(v))) for v in order if abs(v - round(v/20)*20) < 1e-9], rotation=90) # positions: keep indices whose value is a multiple of 20 (tolerant to float noise, works for negatives)
+   
+    # xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0 and np.abs(v) % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)
+    #                 or (isinstance(v, (int, float)) and np.abs(v).isdigit() and np.abs(v) % 20 == 0)]
+
+    xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
+    ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
+
+   
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
     plt.title('MTF50 vs Depth')
-    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+    plt.grid(True, alpha=0.4)
     plt.tight_layout()
     plt.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close()
-
-
 
 
 def plot_mtf50_violins_with_topmedian_zoom(
@@ -269,13 +276,17 @@ def plot_mtf50_violins_with_topmedian_zoom(
 
     # --- (1) all depths ---
     # Define order for x-axis based on unique depth values
-    order = d[depth_col].astype(str).drop_duplicates().tolist()
+    order = d[depth_col].drop_duplicates().tolist()
     plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.strip().lstrip('+-').isdigit() and int(v) % 20 == 0)]
+    # xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9]
+    # xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0 and np.abs(v) % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)
+    #             or (isinstance(v, (int, float)) and np.abs(v).isdigit() and np.abs(v) % 20 == 0)]
+    xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
+    ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
+    
     plt.tight_layout()
     plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
@@ -315,7 +326,6 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.tight_layout()
     plt.savefig(out_base / zoom_outfile, dpi=800, bbox_inches="tight")
     plt.close()
-
 
 
 def main():
@@ -397,9 +407,6 @@ def main():
 
 
 
-
-
 if __name__ == "__main__":
     main()
-
 

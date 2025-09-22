@@ -19,7 +19,7 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SNO10_420mm"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_420mm"
 
 # Where to write patches and results:
 PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_final_results"

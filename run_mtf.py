@@ -238,7 +238,7 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.figure()  # <-- default size
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 50 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 50 == 0)]
+    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)]
     ax.set_xticks(xtick_indices)
     ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
     plt.xlabel('Depth (µm)')
@@ -271,12 +271,13 @@ def plot_mtf50_violins_with_topmedian_zoom(
     # Define order for x-axis based on unique depth values
     order = d[depth_col].astype(str).drop_duplicates().tolist()
     plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
-    sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="quartile", scale="width", bw=0.2, width=0.9, linewidth=1)
+    sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 50 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 50 == 0)]
+    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)]
     ax.set_xticks(xtick_indices)
     ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
     plt.tight_layout()
+    plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
     plt.close()
 
@@ -309,7 +310,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.axhline(top_median, ls="--", lw=1)
     plt.ylim(y_lo, y_hi)
     plt.xticks(rotation=90 if (order and len(order) > 12) else 0)
-    plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+    plt.grid(True,alpha=0.4)
     plt.title(f"Zoom near top median depth: {top_depth} (MTF50={top_median:.3f})")
     plt.tight_layout()
     plt.savefig(out_base / zoom_outfile, dpi=800, bbox_inches="tight")

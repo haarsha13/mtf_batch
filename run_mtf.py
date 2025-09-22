@@ -238,9 +238,10 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.figure()  # <-- default size
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
-    xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9]
+    # order = the exact list of x categories you passed to seaborn (e.g., [-100, -90, ..., 0, 10, ...])
+    xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9] # positions: keep indices whose value is a multiple of 20 (tolerant to float noise, works for negatives)
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(int(round(v))) for v in order if abs(v - round(v/20)*20) < 1e-9], rotation=90)
+    ax.set_xticklabels([str(int(round(v))) for v in order if abs(v - round(v/20)*20) < 1e-9], rotation=90) # positions: keep indices whose value is a multiple of 20 (tolerant to float noise, works for negatives)
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
     plt.title('MTF50 vs Depth')
@@ -273,9 +274,9 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
-    xtick_indices = [i for i, v in enumerate(order) if (isinstance(v, (int, float)) and v % 20 == 0) or (isinstance(v, str) and v.isdigit() and int(v) % 20 == 0)]
+    xtick_indices = [i for i,v in enumerate(order) if abs(v - round(v/20)*20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(order[i]) for i in xtick_indices], rotation=90)
+    ax.set_xticklabels([str(int(round(v))) for v in order if abs(v - round(v/20)*20) < 1e-9], rotation=90)
     plt.tight_layout()
     plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")

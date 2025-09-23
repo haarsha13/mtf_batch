@@ -12,6 +12,7 @@ import sys
 import traceback
 import math,matplotlib as mpl
 import matplotlib.tri as mtri
+from scipy.spatial import Delaunay
 
 # headless plotting
 import matplotlib
@@ -243,11 +244,10 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
 
-    xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
+    xtick_indices = [i for i, v in enumerate(order) if abs(float(v) % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
+    ax.set_xticklabels([str(int(v)) for v in order if abs(float(v) % 20) < 1e-9], rotation=90)
 
-   
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
     plt.title('MTF50 vs Depth')
@@ -279,10 +279,10 @@ def plot_mtf50_violins_with_topmedian_zoom(
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
 
-    xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
+    xtick_indices = [i for i, v in enumerate(order) if abs(float(v) % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
-    ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
-    
+    ax.set_xticklabels([str(int(v)) for v in order if abs(float(v) % 20) < 1e-9], rotation=90)
+
     plt.tight_layout()
     plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
@@ -375,11 +375,12 @@ def tricontour_mtf_xy(
     ypixel_col: str = "y_pix",
     levels: int = 30,
     outfile: str = "mtf50_xy_tricontour.png",
+    outfile_delaunay: str = "delaunay_tri.png"
 ):
     """Triangulated contour plots of MTF50 across (x_pix, y_pix) for each depth."""
     # --- clean & bounds (global color scale so panels are comparable) ---
     d0 = df.dropna(subset=[depth_col, xpixel_col, ypixel_col, mtf_col]).copy()
-    d0 = d0[(d0[mtf_col] > 0) & (d0[mtf_col] < 1)]
+    d0 = _clean_plot_data(d0, depth_col, mtf_col, y_lo=0.0, y_hi=1.0)
     vmin, vmax = 0.0, 0.30
     cmap = plt.cm.viridis
 
@@ -411,7 +412,7 @@ def tricontour_mtf_xy(
             tri = mtri.Triangulation(x, y)
             cs = ax.tricontourf(tri, z, levels=levels, cmap=cmap, vmin=vmin, vmax=vmax)
             # Optional: overlay mesh
-            ax.triplot(tri, color="k", alpha=0.15, linewidth=0.3)
+            #ax.triplot(tri, color="k", alpha=0.15, linewidth=0.3)
 
 
     # Hide any unused axes
@@ -429,6 +430,20 @@ def tricontour_mtf_xy(
     fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
     fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close(fig)
+
+    # --- (5) Delaunay triangulation of all points ---
+    for ax, depth in zip(axes.flat, depths):
+        di = d0[d0[depth_col] == depth]
+        depth_label = str(depth)
+        ax.set_title(f"{depth_label} µm (n={len(di)})", fontsize=9)
+        ax.set_aspect("equal", adjustable="box")
+        ax.invert_yaxis()
+        ax.grid(True, alpha=0.25, linewidth=0.3)
+        points = Delaunay(d0[['x_pix', 'y_pix']])
+        plt.triplot(d0['x_pix'], d0['y_pix'], points.simplices.copy())
+        plt.plot(d0['x_pix'], d0['y_pix'], 'o')
+    plt.savefig(out_base / outfile_delaunay, dpi=800, bbox_inches="tight")
+    plt.close()
 
 def main():
     in_path = Path(INPUT)
@@ -471,7 +486,7 @@ def main():
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 xpixel_col='x_pix', ypixel_col='y_pix',
-                levels=30, outfile="mtf50_xy_tricontour2.png"
+                levels=30, outfile="mtf50_xy_tricontour.png", outfile_delaunay="delaunay_tri.png"
             )
 
             return  # done
@@ -534,7 +549,7 @@ def main():
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 xpixel_col='x_pix', ypixel_col='y_pix',
-                levels=30, outfile="mtf50_xy_tricontour2.png"
+                levels=30, outfile="mtf50_xy_tricontour.png", outfile_delaunay="delaunay_tri.png"
             )
 
 

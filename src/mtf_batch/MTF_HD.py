@@ -397,11 +397,11 @@ class MTF:
     return cSet(lsfDistances, lsfValues)
 
   @staticmethod
-  def GetMTF(LSF, fraction, verbose = Verbosity.NONE):
+  def GetMTF(LSF, fraction, verbose = Verbosity.NONE, beta=14):
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 
-    window = windows.kaiser(N,beta=14)
+    window = windows.kaiser(N,beta=beta)
     windowed_y = LSF.y * window
 
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
@@ -446,14 +446,14 @@ class MTF:
     return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y, window
 
   @staticmethod
-  def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE):
+  def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE, beta=14):
     contrast = Transform._michelson_contrast01(imgArr_orig)
 
     imgArr, verticality = Transform.Orientify(imgArr_orig)
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL)  # see MTF plot
+    mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL, beta=beta)  # see MTF plot
 
     if verticality > 0:
         verticality = "Vertical"
@@ -512,7 +512,7 @@ class MTF:
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
   @staticmethod
-  def analyze(imgArr, filename="", fraction=0.5):
+  def analyze(imgArr, filename="", fraction=0.5 , beta=14):
     """Pure analysis (metrics+arrays), no plotting."""
     contrast = Transform._michelson_contrast01(imgArr)
     imgArr2, verticality = Transform.Orientify(imgArr)
@@ -520,7 +520,7 @@ class MTF:
 
     esf = MTF.GetESF_crop(imgArr2, Verbosity.NONE)
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
-    mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE)
+    mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE, beta=beta)
 
     edge_profile = "Vertical" if verticality > 0 else "Horizontal"
     mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
@@ -545,18 +545,18 @@ class MTF:
     AnalyzeToReport = analyze
 
   @staticmethod
-  def run(imgArr, fraction=0.5, plot=False, verbose=Verbosity.NONE, filename=""):
+  def run(imgArr, fraction=0.5, plot=False, verbose=Verbosity.NONE, filename="", beta=14):
         """
         Single public entrypoint:
           - always does analysis and returns an MTFReport
           - if plot=True, also renders the usual figure and returns the Matplotlib Figure
         """
-        rep = MTF.analyze(imgArr, filename=filename, fraction=fraction)
+        rep = MTF.analyze(imgArr, filename=filename, fraction=fraction, beta=beta)
 
         fig = None
         if plot:
             # reuse your existing full-figure function
-            MTF.MTF_Full(imgArr, fraction, verbose=verbose)
+            MTF.MTF_Full(imgArr, fraction, verbose=verbose, beta=beta)
             import matplotlib.pyplot as plt
             fig = plt.gcf()
     

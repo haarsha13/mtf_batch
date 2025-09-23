@@ -409,6 +409,17 @@ def main():
             plt.savefig(out_base / "mtf50_x_pix_y_pix_heatmap2.png", dpi=800, bbox_inches="tight")
             plt.close()
 
+
+            plt.scatter(dat_all['x_pix'], dat_all['y_pix'], c=dat_all['mtf50_freq'], cmap='viridis', vmin=0, vmax=0.5)
+            plt.colorbar(label='MTF50')
+            plt.xlabel('x_pix')
+            plt.ylabel('y_pix')
+            plt.title('MTF50 across Image Coordinates')
+            plt.grid(True, alpha=0.4)
+            plt.tight_layout()
+            plt.savefig(out_base / "mtf50_x_pix_y_pix_scatter.png", dpi=800, bbox_inches="tight")
+            plt.close()
+
             return  # done
 
     # ---------------- FULL PIPELINE ----------------

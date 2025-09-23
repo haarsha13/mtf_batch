@@ -45,6 +45,7 @@ WRITE_FIGURES = True      # save MTF plot per patch?
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 
 # --- quick runner toggle ---
+TOGGLE_RUN_MTF = True      # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
 USE_EXISTING_CSV = True # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
@@ -94,7 +95,7 @@ def _safe_patch(arr: np.ndarray, center_xy: np.ndarray, size: int) -> np.ndarray
     return patch
 
 # ---------- main processing ----------
-def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
+def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF) -> list[dict]:
     """Slice one image into patches, save them, run MTF on each. Return list of CSV rows."""
     rows: list[dict] = []
     src_stem = src_path.stem
@@ -158,51 +159,51 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path) -> list[dict]:
             "y_pix": int(cxy[1]),
             "patch_file": patch_name
         })
+        if TOGGLE_RUN_MTF is True: #If enabled, run MTF on each patch
+            # 5) run MTF on this patch
+            try:
+                verbosity = getattr(getattr(rs_mtf, "Verbosity", None), "DETAIL", 0)
+            except Exception:
+                verbosity = 0
 
-        # 5) run MTF on this patch
-        try:
-            verbosity = getattr(getattr(rs_mtf, "Verbosity", None), "DETAIL", 0)
-        except Exception:
-            verbosity = 0
+            try: #Try to run MTF, if it fails, catch the error and continue
+                rep, fig = rs_mtf.MTF.run(
+                    patch, FRACTION,
+                    plot=WRITE_FIGURES,
+                    verbose=verbosity,
+                    filename=patch_name,
+                )
 
-        try: #Try to run MTF, if it fails, catch the error and continue
-            rep, fig = rs_mtf.MTF.run(
-                patch, FRACTION,
-                plot=WRITE_FIGURES,
-                verbose=verbosity,
-                filename=patch_name
-            )
+            except Exception as e: #Fail gracefully and give nan values for failed patches
+                print(f"[WARN] MTF failed on {patch_name}: {e}")
+                rep, fig = None, None
 
-        except Exception as e: #Fail gracefully and give nan values for failed patches
-            print(f"[WARN] MTF failed on {patch_name}: {e}")
-            rep, fig = None, None
+            # save figure if present
+            fig_path = None
+            if fig is not None and WRITE_FIGURES:
+                fig_path = img_out_dir / f"{src_stem}_patch{i:02d}_mtf.png"
+                fig.savefig(fig_path, bbox_inches="tight", dpi=300)
+                plt.close(fig)
 
-        # save figure if present
-        fig_path = None
-        if fig is not None and WRITE_FIGURES:
-            fig_path = img_out_dir / f"{src_stem}_patch{i:02d}_mtf.png"
-            fig.savefig(fig_path, bbox_inches="tight", dpi=300)
-            plt.close(fig)
+            # build CSV row safely
+            def _get(obj, name, default=None):
+                return getattr(obj, name, default)
 
-        # build CSV row safely
-        def _get(obj, name, default=None):
-            return getattr(obj, name, default)
-
-        rows.append({ # one row per patch
-            "source_image": src_path.name,
-            "depth_um": depth,
-            "x_pix": int(cxy[0]),
-            "y_pix": int(cxy[1]),
-            "image_w": _get(rep, "image_w"),
-            "image_h": _get(rep, "image_h"),
-            "edge_profile": _get(rep, "edge_profile"),
-            "angle_deg": _get(rep, "angle_deg"),
-            "width_px": _get(rep, "width_px"),
-            "threshold": _get(rep, "threshold"),
-            "contrast": _get(rep, "contrast"),
-            "mtf50_freq": _get(rep, "mtf50_freq"),
-            "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
-        })
+            rows.append({ # one row per patch
+                "source_image": src_path.name,
+                "depth_um": depth,
+                "x_pix": int(cxy[0]),
+                "y_pix": int(cxy[1]),
+                "image_w": _get(rep, "image_w"),
+                "image_h": _get(rep, "image_h"),
+                "edge_profile": _get(rep, "edge_profile"),
+                "angle_deg": _get(rep, "angle_deg"),
+                "width_px": _get(rep, "width_px"),
+                "threshold": _get(rep, "threshold"),
+                "contrast": _get(rep, "contrast"),
+                "mtf50_freq": _get(rep, "mtf50_freq"),
+                "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
+            })
 
 
     if SAVE_PER_IMAGE_MANIFEST: #If enabled, save the patch centers for each image as a csv file
@@ -237,7 +238,6 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.scatter(xs, d[mtf_col].values, s=10, alpha=0.6, edgecolors='none')
     ax = plt.gca()
 
-    # order = the exact list of x categories you passed to seaborn (e.g., [-100, -90, ..., 0, 10, ...])
     xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
     ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
@@ -273,6 +273,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
+
     xtick_indices = [i for i, v in enumerate(order) if abs(v % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
     ax.set_xticklabels([str(int(v)) for v in order if abs(v % 20) < 1e-9], rotation=90)
@@ -318,6 +319,47 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.close()
 
 
+# def heatmapper(df, x_col="x", y_col="y", mtf_col="mtf50_freq", bins=150):
+#     # Ensure numeric columns
+#     df = df.copy()
+
+#     # Bin onto a regular grid
+#     heatmap_data, xedges, yedges = np.histogram2d(df[y_col], df[x_col], bins=bins, weights=df[mtf_col])
+    
+#     counts, _, _ = np.histogram2d(df[y_col], df[x_col], bins=bins)
+
+#     # Avoid divide-by-zero
+#     heatmap_data = np.divide(heatmap_data, counts, where=counts > 0)
+
+#     # Plot heatmap
+#     sns.heatmap(
+#         heatmap_data,
+#         cmap="viridis",
+#         cbar_kws={"label": mtf_col},
+#         vmin=np.nanmin(heatmap_data),
+#         vmax=np.nanmax(heatmap_data),
+#     )
+#     plt.gca().invert_yaxis()  # so y=0 is at the bottom
+#     plt.show()
+    
+    # def heatmapper(data, x = 'x', y = 'y', depth_col='depth_um', mtf_col='mtf50_freq', cmap='viridis'):
+    #     """2D histogram heatmap of MTF50 vs depth."""
+    #     d = _clean_plot_data(data, depth_col, mtf_col)
+    #     if d.empty:
+    #         print("No data to plot for heatmap.")
+    #         return
+    # plt.figure(figsize=(10, 8), dpi=200)
+    # sns.heatmap(d, vmin = np.min(d[mtf_col]), vmax = np.max(d[mtf_col]), cmap='viridis')
+    # plt.colorbar(label='Counts')
+    # plt.xlabel('Depth (µm)')
+    # plt.ylabel('MTF50 (cyc/pixel)')
+    # plt.title('MTF50 vs Depth Heatmap')
+    # plt.tight_layout()
+    # plt.savefig("mtf50_vs_depth_heatmap.png", dpi=800, bbox_inches="tight")
+    # plt.close()
+    # return
+
+
 def main():
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)
@@ -334,7 +376,7 @@ def main():
         else:
             print(f"[PLOTS-ONLY] Reading: {summary_csv}")
             dat_all = pd.read_csv(summary_csv)
-            # Make the figures and stop
+            dat_all = _clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
             plot_mtf50_vs_depth(
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
@@ -347,20 +389,7 @@ def main():
                 all_outfile="mtf50_violin_all.png",
                 zoom_outfile="mtf50_violin_zoom_topmedian.png"
             )
-
-            # Plot a heatmap showing the average MTF50 value at each (x_pix, y_pix) position
-            pivot = dat_all.pivot_table(columns ="x_pix", index="y_pix", values="mtf50_freq")
-            cmap = plt.cm.get_cmap("Paired").copy()
-            cmap.set_bad(cmap(0.0))  # NaNs appear as the same color as value 0
-
-            sns.heatmap(pivot, annot=False, cmap=cmap,
-            cbar_kws={'label': 'MTF50'}, vmin=0, vmax=0.5)
-            plt.xlabel("x_pix")
-            plt.ylabel("y_pix")
-            plt.title("MTF50 vs x_pix and y_pix")
-            plt.tight_layout()
-            plt.savefig(out_base / "mtf50_x_pix_y_pix_heatmap2.png", dpi=800, bbox_inches="tight")
-            plt.close()
+            heatmapper(dat_all, x_col = 'x_pix', y_col = 'y_pix', mtf_col='mtf50_freq', bins=200)
             return  # done
 
     # ---------------- FULL PIPELINE ----------------
@@ -379,38 +408,38 @@ def main():
     for f in files:
         try:
             print(f" → {f}") #Print the file being processed
-            rows = process_image(rs_mtf, rs_hyp, f, out_base) #Process the image and get list of dictionaries for each patch
+            rows = process_image(rs_mtf, rs_hyp, f, out_base, TOGGLE_RUN_MTF=TOGGLE_RUN_MTF) #Process the image and get list of dictionaries for each patch
             all_rows.extend(rows) #Add the dictionaries to the all_rows list
         except Exception as e:
             print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
 
-    if all_rows:
-        summary_csv = out_base / SUMMARY_CSV
+    if TOGGLE_RUN_MTF is True: #If MTF was run, save the summary CSV and make plots
+        if all_rows:
+            summary_csv = out_base / SUMMARY_CSV
+            dat_all = pd.DataFrame(all_rows)
+            dat_all.to_csv(summary_csv, index=False)
+            print(f"\nSummary CSV → {summary_csv}")
+
         dat_all = pd.DataFrame(all_rows)
         dat_all.to_csv(summary_csv, index=False)
         print(f"\nSummary CSV → {summary_csv}")
 
-    dat_all = pd.DataFrame(all_rows)
-    dat_all.to_csv(summary_csv, index=False)
-    print(f"\nSummary CSV → {summary_csv}")
-
-    # Make plots from the DataFrame we just created
-    plot_mtf50_vs_depth(
+        # Make plots from the DataFrame we just created
+        plot_mtf50_vs_depth(
+            dat_all, out_base,
+            depth_col='depth_um', mtf_col='mtf50_freq',
+            y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
+        )
+        
+        plot_mtf50_violins_with_topmedian_zoom(
         dat_all, out_base,
-        depth_col='depth_um', mtf_col='mtf50_freq',
-        y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
-    )
-    
-    plot_mtf50_violins_with_topmedian_zoom(
-    dat_all, out_base,
-    depth_col="depth_um", mtf_col="mtf50_freq",
-    y_lo=0.0, y_hi=0.5, depth_window=50.0
-    )
+        depth_col="depth_um", mtf_col="mtf50_freq",
+        y_lo=0.0, y_hi=0.5, depth_window=50.0
+        )
 
 
 
 
 if __name__ == "__main__":
     main()
-

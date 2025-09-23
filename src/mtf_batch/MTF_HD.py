@@ -119,10 +119,12 @@ class Transform:
         Returns 0.0 if too few edge pixels are found.
         """
     
-    a = np.asarray(arr01, dtype=float)
+    a = np.asarray(arr01, dtype=float) # ensure a NumPy float array
     if a.max() > 1.0:  # normalize if not already 0..1
       a = a / 255.0
-    a = np.squeeze(a)
+
+    a = np.squeeze(a)  # drop any singleton dimensions
+
     if a.ndim == 3 and a.shape[2] >= 3:
       # Convert RGB to luma (Rec. 709 coefficients)
       a = 0.2126*a[...,0] + 0.7152*a[...,1] + 0.0722*a[...,2]
@@ -130,7 +132,12 @@ class Transform:
     line = np.argwhere(edgeImg == 255)
     if line.size < 2:
       return 0.0
+    
+    #Fit y = mx + b in image coords
     edgePoly = np.polyfit(line[:,1], line[:,0], 1)
+
+    # Convert slope to to angle in degrees.
+    # Image rows increase downwards, so invert sign.
     angle = math.degrees(math.atan(-edgePoly[0]))
     return float(angle) 
 
@@ -517,32 +524,32 @@ class MTF:
        0.5 = Nyquist. Returns the full MTF curve plus the frequency where
        it crosses `fraction` (e.g. 0.5 for MTF50)."""
     
+    # --- Apply Kaiser window to LSF to reduce spectral leakage ---
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 
+    # Kaiser window
     window = windows.kaiser(N,beta=beta)
     windowed_y = LSF.y * window
 
+    # --- FFT to get MTF ---
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
 
-    #values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
-    
+    # Keep only the first half (real-valued input → symmetric FFT)
     distances = np.arange(0,N)/N*px
 
+    # Normalize spatial frequency to [0,1], where 0.5 = Nyquist
     interpDistances = np.linspace(0,1,200)
     interp = interpolate.interp1d(distances, values, kind='cubic')
     interpValues = interp(interpDistances)
     valueAtNyquist = float(interp(0.5)) * 100
 
+    # --- Find frequency where MTF crosses `fraction` ---
     target = fraction
-    #crossing_idx = np.where(interpValues <= target)[0]
-    #if len(crossing_idx) > 0:
-    #    cutoff_freq = interpDistances[crossing_idx[0]]
-    #else:
-    #    cutoff_freq = None
-
+  
     crossing_idx = np.where(interpValues <= fraction)[0]
 
+    # Find the first crossing index
     if len(crossing_idx) > 0:
         i = crossing_idx[0]
         # Linear interpolation for better accuracy
@@ -552,7 +559,7 @@ class MTF:
     else:
         cutoff_freq = None
 
-
+    # --- Verbose output ---
     if (verbose == Verbosity.BRIEF):
       print(f"MTF [done]")
     elif (verbose == Verbosity.DETAIL):
@@ -566,14 +573,18 @@ class MTF:
 
   @staticmethod
   def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE, beta=14):
+    """Full MTF analysis with optional plotting of all steps.
+       Returns the final MTF struct."""
+    
+    # --- Preprocess image ---
     contrast = Transform._michelson_contrast01(imgArr_orig)
-
     imgArr, verticality = Transform.Orientify(imgArr_orig)
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
     mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL, beta=beta)  # see MTF plot
 
+    # --- Final verbose plot with all steps ---
     if verticality > 0:
         verticality = "Vertical"
     else:
@@ -591,11 +602,15 @@ class MTF:
         ax3 = plt.subplot(gs[2, 0])
         ax4 = plt.subplot(gs[:, 1])
 
+
+        # Plot original image
         ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
         ax1.plot(x, y, color='red', label = 'Edge After Orientation')
         ax1.axis('off')
         ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
         ax1.legend(loc='lower left', fontsize=5)
+
+        # Plot raw and smoothed ESF
         ax2.plot(esf.rawESF.x, esf.rawESF.y,
                  esf.interpESF.x, esf.interpESF.y)
         top = np.max(esf.rawESF.y)-esf.threshold
@@ -607,6 +622,7 @@ class MTF:
         ax2.grid(True)
         ax2.minorticks_on()
 
+        # Plot windowed LSF
         ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
@@ -614,6 +630,7 @@ class MTF:
         ax3.minorticks_on()
         ax3.legend(loc='upper right', fontsize=5)
 
+        # Plot MTF
         ax4.plot(mtf.x, mtf.y)
         ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.3f}\nMTF at Nyquist: {mtf.mtfAtNyquist/100:0.5f}")
         ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
@@ -627,20 +644,26 @@ class MTF:
         ax4.minorticks_on()
 
         plt.tight_layout()
-        #plt.show()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
   @staticmethod
   def analyze(imgArr, filename="", fraction=0.5 , beta=14):
-    """Pure analysis (metrics+arrays), no plotting."""
+
+    """Perform MTF analysis and return an MTFReport.
+       This is the core function that does not plot anything.
+       Use MTF.run() to get both the report and (optionally) the plots."""
+
+    # --- Preprocess image ---
     contrast = Transform._michelson_contrast01(imgArr)
     imgArr2, verticality = Transform.Orientify(imgArr)
     w, h = imgArr2.shape[0], imgArr2.shape[1]
 
+    # --- MTF analysis ---
     esf = MTF.GetESF_crop(imgArr2, Verbosity.NONE)
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
     mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE, beta=beta)
 
+    # --- Package results ---
     edge_profile = "Vertical" if verticality > 0 else "Horizontal"
     mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
 

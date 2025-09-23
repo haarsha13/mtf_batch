@@ -204,6 +204,8 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF
                 "width_px": _get(rep, "width_px"),
                 "threshold": _get(rep, "threshold"),
                 "contrast": _get(rep, "contrast"),
+                "mtf_x": _get(rep, "mtf_x"),
+                "mtf_y": _get(rep, "mtf_y"),
                 "mtf50_freq": _get(rep, "mtf50_freq"),
                 "mtf_at_nyquist": _get(rep, "mtf_at_nyquist"),
             })

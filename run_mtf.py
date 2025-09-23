@@ -430,50 +430,6 @@ def tricontour_mtf_xy(
     fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close(fig)
 
-    
-
-
-# def heatmapper(df, x_col="x", y_col="y", mtf_col="mtf50_freq", bins=150):
-#     # Ensure numeric columns
-#     df = df.copy()
-
-#     # Bin onto a regular grid
-#     heatmap_data, xedges, yedges = np.histogram2d(df[y_col], df[x_col], bins=bins, weights=df[mtf_col])
-    
-#     counts, _, _ = np.histogram2d(df[y_col], df[x_col], bins=bins)
-
-#     # Avoid divide-by-zero
-#     heatmap_data = np.divide(heatmap_data, counts, where=counts > 0)
-
-#     # Plot heatmap
-#     sns.heatmap(
-#         heatmap_data,
-#         cmap="viridis",
-#         cbar_kws={"label": mtf_col},
-#         vmin=np.nanmin(heatmap_data),
-#         vmax=np.nanmax(heatmap_data),
-#     )
-#     plt.gca().invert_yaxis()  # so y=0 is at the bottom
-#     plt.show()
-    
-    # def heatmapper(data, x = 'x', y = 'y', depth_col='depth_um', mtf_col='mtf50_freq', cmap='viridis'):
-    #     """2D histogram heatmap of MTF50 vs depth."""
-    #     d = _clean_plot_data(data, depth_col, mtf_col)
-    #     if d.empty:
-    #         print("No data to plot for heatmap.")
-    #         return
-    # plt.figure(figsize=(10, 8), dpi=200)
-    # sns.heatmap(d, vmin = np.min(d[mtf_col]), vmax = np.max(d[mtf_col]), cmap='viridis')
-    # plt.colorbar(label='Counts')
-    # plt.xlabel('Depth (µm)')
-    # plt.ylabel('MTF50 (cyc/pixel)')
-    # plt.title('MTF50 vs Depth Heatmap')
-    # plt.tight_layout()
-    # plt.savefig("mtf50_vs_depth_heatmap.png", dpi=800, bbox_inches="tight")
-    # plt.close()
-    # return
-
-
 def main():
     in_path = Path(INPUT)
     out_base = Path(PATCH_OUT_BASE)

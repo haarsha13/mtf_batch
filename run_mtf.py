@@ -46,7 +46,7 @@ WRITE_FIGURES = True      # save MTF plot per patch?
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 
 # --- quick runner toggle ---
-TOGGLE_RUN_MTF = True      # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
+TOGGLE_RUN_MTF = True     # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
 USE_EXISTING_CSV = True # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
@@ -320,6 +320,9 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.close()
 
 
+    return 
+
+
 # def heatmapper(df, x_col="x", y_col="y", mtf_col="mtf50_freq", bins=150):
 #     # Ensure numeric columns
 #     df = df.copy()
@@ -390,8 +393,9 @@ def main():
                 all_outfile="mtf50_violin_all.png",
                 zoom_outfile="mtf50_violin_zoom_topmedian.png"
             )
-            
-              # Plot a heatmap showing the average MTF50 value at each (x_pix, y_pix) position
+
+          
+            # Plot a heatmap showing the average MTF50 value at each (x_pix, y_pix) position
             pivot = dat_all.pivot_table(columns ="x_pix", index="y_pix", values="mtf50_freq")
             cmap = plt.cm.get_cmap("Paired").copy()
             cmap.set_bad(cmap(0.0))  # NaNs appear as the same color as value 0
@@ -404,7 +408,7 @@ def main():
             plt.tight_layout()
             plt.savefig(out_base / "mtf50_x_pix_y_pix_heatmap2.png", dpi=800, bbox_inches="tight")
             plt.close()
-            
+
             return  # done
 
     # ---------------- FULL PIPELINE ----------------
@@ -452,8 +456,6 @@ def main():
         depth_col="depth_um", mtf_col="mtf50_freq",
         y_lo=0.0, y_hi=0.5, depth_window=50.0
         )
-
-
 
 
 if __name__ == "__main__":

@@ -10,6 +10,8 @@ import cv2
 import json
 import sys
 import traceback
+import math,matplotlib as mpl
+import matplotlib.tri as mtri
 
 # headless plotting
 import matplotlib
@@ -22,7 +24,7 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_420mm"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_final_results"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN010_final_results"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
@@ -320,7 +322,113 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.close()
 
 
-    return 
+def plot_scatter(df: pd.DataFrame, out_base: Path, depth_col: str = "depth_um",
+    mtf_col: str = "mtf50_freq", xpixel_col: str = "x_pix", ypixel_col: str = "y_pix", outfile: str = "mtf50_x_y_scatter.png"):
+
+    # --- (3) scatter by depth ---
+    # Clean data & set global color scale (same across all depths)
+    df = df.dropna(subset=[xpixel_col, ypixel_col, mtf_col, depth_col]).copy()
+    vmin, vmax = 0.0, 0.3  # keep consistent scale; tweak if needed
+
+    depths = sorted(df[depth_col].unique())
+    n = len(depths)
+    cols = min(4, n)
+    rows = math.ceil(n / cols)
+
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2*cols, 4.2*rows), dpi=150, sharex=True, sharey=True)
+    axes = np.atleast_2d(axes)
+
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = plt.get_cmap('viridis')
+
+    for ax, depth in zip(axes.flat, depths):
+        d = df[df['depth_um'] == depth]
+        sc = ax.scatter(d['x_pix'], d['y_pix'], c=d['mtf50_freq'],
+                        s=100, cmap=cmap, norm=norm)
+        ax.set_title(f'{depth} µm (n={len(d)})', fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.set_aspect('equal', adjustable='box')
+        ax.invert_yaxis()
+
+    # Hide any unused axes
+    for ax in axes.flat[len(depths):]:
+        ax.axis('off')
+
+    # One shared colorbar
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, label='MTF50 (normalized)')
+    fig.suptitle('MTF50 across Image Coordinates by Focal Stack Depth', y=0.98)
+    fig.tight_layout(rect=[0, 0, 0.9, 0.96])
+    fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
+    plt.close(fig)
+
+
+
+
+def tricontour_mtf_xy(
+    df: pd.DataFrame, out_base: Path,
+    depth_col: str = "depth_um",
+    mtf_col: str = "mtf50_freq",
+    xpixel_col: str = "x_pix",
+    ypixel_col: str = "y_pix",
+    levels: int = 30,
+    outfile: str = "mtf50_xy_tricontour.png",
+):
+    """Triangulated contour plots of MTF50 across (x_pix, y_pix) for each depth."""
+    # --- clean & bounds (global color scale so panels are comparable) ---
+    d0 = df.dropna(subset=[depth_col, xpixel_col, ypixel_col, mtf_col]).copy()
+    d0 = d0[(d0[mtf_col] > 0) & (d0[mtf_col] < 1)]
+    vmin, vmax = 0.0, 0.30
+    cmap = plt.cm.viridis
+
+    depths = sorted(df[depth_col].unique())
+    n = len(depths)
+    cols = min(4, n)
+    rows = math.ceil(n / cols)
+    
+
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2*cols, 4.2*rows), dpi=150, sharex=True, sharey=True)
+    axes = np.atleast_2d(axes)
+
+    for ax, depth in zip(axes.flat, depths):
+        di = d0[d0[depth_col] == depth]
+        depth_label = str(depth)
+        ax.set_title(f"{depth_label} µm (n={len(di)})", fontsize=9)
+        ax.set_aspect("equal", adjustable="box")
+        ax.invert_yaxis()
+        ax.grid(True, alpha=0.25, linewidth=0.3)
+
+        # Need at least 3 non-collinear points for a triangulation
+        if di.shape[0] < 3 or di[[xpixel_col, ypixel_col]].drop_duplicates().shape[0] < 3:
+            ax.text(0.5, 0.5, "not enough points", ha="center", va="center", fontsize=8, transform=ax.transAxes)
+        else:
+            x = di[xpixel_col].to_numpy(float)
+            y = di[ypixel_col].to_numpy(float)
+            z = di[mtf_col].to_numpy(float)
+
+            tri = mtri.Triangulation(x, y)
+            cs = ax.tricontourf(tri, z, levels=levels, cmap=cmap, vmin=vmin, vmax=vmax)
+            # Optional: overlay mesh
+            ax.triplot(tri, color="k", alpha=0.15, linewidth=0.3)
+
+
+    # Hide any unused axes
+    for ax in axes.flat[len(depths):]:
+        ax.axis('off')
+
+
+    # Shared colorbar
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=vmin, vmax=vmax), cmap=cmap)
+    sm.set_array([])
+    fig.colorbar(sm, cax=cax, label="MTF50")
+
+    fig.suptitle("MTF50 across (x,y) by focal depth", y=0.99)
+    fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
+    fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
+    plt.close(fig)
+
+    
 
 
 # def heatmapper(df, x_col="x", y_col="y", mtf_col="mtf50_freq", bins=150):
@@ -394,31 +502,19 @@ def main():
                 zoom_outfile="mtf50_violin_zoom_topmedian.png"
             )
 
-          
-            # Plot a heatmap showing the average MTF50 value at each (x_pix, y_pix) position
-            pivot = dat_all.pivot_table(columns ="x_pix", index="y_pix", values="mtf50_freq")
-            cmap = plt.cm.get_cmap("Paired").copy()
-            cmap.set_bad(cmap(0.0))  # NaNs appear as the same color as value 0
+            plot_scatter(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                xpixel_col='x_pix', ypixel_col='y_pix',
+                outfile="mtf50_x_y_scatter.png"
+            )
 
-            sns.heatmap(pivot, annot=False, cmap=cmap,
-            cbar_kws={'label': 'MTF50'}, vmin=0, vmax=0.5)
-            plt.xlabel("x_pix")
-            plt.ylabel("y_pix")
-            plt.title("MTF50 vs x_pix and y_pix")
-            plt.tight_layout()
-            plt.savefig(out_base / "mtf50_x_pix_y_pix_heatmap2.png", dpi=800, bbox_inches="tight")
-            plt.close()
-
-
-            plt.scatter(dat_all['x_pix'], dat_all['y_pix'], c=dat_all['mtf50_freq'], cmap='viridis', vmin=0, vmax=0.5)
-            plt.colorbar(label='MTF50')
-            plt.xlabel('x_pix')
-            plt.ylabel('y_pix')
-            plt.title('MTF50 across Image Coordinates')
-            plt.grid(True, alpha=0.4)
-            plt.tight_layout()
-            plt.savefig(out_base / "mtf50_x_pix_y_pix_scatter.png", dpi=800, bbox_inches="tight")
-            plt.close()
+            tricontour_mtf_xy(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                xpixel_col='x_pix', ypixel_col='y_pix',
+                levels=30, outfile="mtf50_xy_tricontour2.png"
+            )
 
             return  # done
 
@@ -454,7 +550,8 @@ def main():
         dat_all = pd.DataFrame(all_rows)
         dat_all.to_csv(summary_csv, index=False)
         print(f"\nSummary CSV → {summary_csv}")
-
+        dat_all = _clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
+        
         # Make plots from the DataFrame we just created
         plot_mtf50_vs_depth(
             dat_all, out_base,
@@ -467,6 +564,20 @@ def main():
         depth_col="depth_um", mtf_col="mtf50_freq",
         y_lo=0.0, y_hi=0.5, depth_window=50.0
         )
+
+        plot_scatter(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                xpixel_col='x_pix', ypixel_col='y_pix',
+                outfile="mtf50_x_y_scatter.png"
+            )
+        
+        tricontour_mtf_xy(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                xpixel_col='x_pix', ypixel_col='y_pix',
+                levels=30, outfile="mtf50_xy_tricontour2.png"
+            )
 
 
 if __name__ == "__main__":

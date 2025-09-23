@@ -1,14 +1,28 @@
 # -*- coding: utf-8 -*-
-"""Resolution and Sharpness of Images
+""""
 
-Original file is located at
-  https://colab.research.google.com/drive/1Dt-SLffFv1G7dlGy5o08Gmy8g_18ySrE
+This module provides tools to analyze the resolution and sharpness of images using the Modulation Transfer Function (MTF) method. 
+It includes functions for loading images, processing edge spread functions (ESF), line spread functions (LSF), and calculating MTF values.
 
-# Resolution and Sharpness of Images
-From Damian Howe and Haarsha Krishna
 
-## Formatting Data and Classes
+High-level pipeline (per image/patch)
+-------------------------------------
+1) Normalize and orient the patch so that the bright/dark quadrants are in a
+   consistent arrangement (Transform.Orientify).
+2) Detect the edge with Canny and fit a line y = m*x + b (MTF.GetESF_crop).
+3) Build the *raw* ESF by projecting pixels onto the normal direction of the
+   fitted edge and sorting by distance (MTF.GetESF).
+4) Smooth and uniformly re-sample the ESF (cubic spline) and **center** it so that
+   the 50% intensity point (edge location) is at x = 0 (MTF.Center_ESF).
+5) Differentiate the ESF to obtain the LSF and optionally normalize it (MTF.GetLSF).
+6) Apply a Kaiser window (β configurable) to the LSF to reduce spectral leakage,
+   then FFT to obtain the MTF. Interpolate onto normalized spatial frequency
+   ∈ [0, 1], where 0.5 = Nyquist (MTF.GetMTF).
+7) Report metrics and (optionally) plot intermediate steps (MTF.MTF_Full).
 """
+
+
+# --Imports--
 
 import matplotlib.pyplot as plt
 import pylab as pylab
@@ -17,8 +31,9 @@ import cv2 as cv2
 import math as math
 import pandas as pd
 import json
+  
 
-
+from skimage.filters import threshold_otsu
 from PIL import Image, ImageOps
 from scipy import interpolate
 from scipy.fft import fft
@@ -27,35 +42,48 @@ from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 
+
+# -------------------------
+# Data containers / enums
+# -------------------------
+
 @dataclass
 class cSet:
-  x: np.ndarray # storing indexes as a numpy array
-  y: np.ndarray # storing values as a numpy array
+  """Generic (x, y) container used for ESF and LSF arrays."""
+  x: np.ndarray # array for indexes
+  y: np.ndarray # array for values
 
 @dataclass
 class cESF:
-  rawESF: cSet # raw ESF data as numpy arrays
-  interpESF: cSet # interpolated ESF data as numpy arrays
+  """Holds both raw and interpolated ESF plus edge metadata."""
+  rawESF: cSet     # ESF from raw pixel projections
+  interpESF: cSet  # smoothed, uniformly sampled ESF
   threshold: float # threshold used for ESF/MTF
-  width: float # pixel transition size
-  angle: float # slant angle (deg)
-  edgePoly: np.ndarray # polynomial of slant
+  width: float  # pixel transition size (edge width estimate)
+  angle: float # fitted edge slant angle in degrees
+  edgePoly: np.ndarray # polynomial coeffs (slope, intercept) of fitted edge
 
 @dataclass
 class cMTF:
-  x: np.ndarray # array for indexes
-  y: np.ndarray # array for values
-  mtfAtNyquist: float # MTF value at sampling speed limit (Nyquist Freq)
-  width: float # pixel transition size
+  """Holds MTF data plus metadata."""
+  x: np.ndarray # normalized spatial frequency (0..1; Nyquist = 0.5)
+  y: np.ndarray # MTF amplitude
+  mtfAtNyquist: float  # MTF value at f=0.5, stored as *percent* inside this struct
+  width: float # pixel transition size (passed-through; not recomputed)
 
 @dataclass
-class Verbosity(Enum): # output types/level of output
+class Verbosity(Enum): 
+  """Verbosity levels for console output and plotting."""
   NONE = 0 # none
   BRIEF = 1 # text
   DETAIL = 2 # graphical
 
 @dataclass
 class MTFReport:
+    """
+    Final analysis bundle for a given image patch.
+    Contains image info, ESF/LSF arrays, and the MTF curve + key metrics.
+    """
     filename: str                    # source image filename
     image_w: int                     # image dimension width (pixels)    
     image_h: int                     # image dimension height (pixels)
@@ -73,18 +101,30 @@ class MTFReport:
     lsf_x: np.ndarray                # optional: LSF x
     lsf_y: np.ndarray                # optional: LSF y
 
-"""## Image importing Functions"""
+
+# -------------------------
+# Image / transform utils
+# --
 
 class Transform:
 
   @staticmethod
   def _raw_edge_angle_deg(arr01):
+
+    """
+        Estimate the dominant edge angle (degrees) in an image by Canny-detecting
+        edge pixels and fitting a line y = m*x + b (via polyfit).
+
+        Input must be grayscale in [0,1] (function will normalize if needed).
+        Returns 0.0 if too few edge pixels are found.
+        """
+    
     a = np.asarray(arr01, dtype=float)
     if a.max() > 1.0:  # normalize if not already 0..1
       a = a / 255.0
     a = np.squeeze(a)
     if a.ndim == 3 and a.shape[2] >= 3:
-      # luminance
+      # Convert RGB to luma (Rec. 709 coefficients)
       a = 0.2126*a[...,0] + 0.7152*a[...,1] + 0.0722*a[...,2]
     edgeImg = cv2.Canny(np.uint8(np.clip(a,0,1)*255), 40, 90, L2gradient=True)
     line = np.argwhere(edgeImg == 255)
@@ -94,37 +134,76 @@ class Transform:
     angle = math.degrees(math.atan(-edgePoly[0]))
     return float(angle) 
 
-  @staticmethod
-  def _otsu_threshold01(gray):
-    g = np.clip(gray, 0.0, 1.0)
-    hist, bin_edges = np.histogram(g.ravel(), bins=256, range=(0.0, 1.0))
-    hist = hist.astype(float)
-    prob = hist / (hist.sum() + 1e-12)
-    omega = np.cumsum(prob)
-    centers = bin_edges[:-1] + (bin_edges[1]-bin_edges[0])/2.0
-    mu = np.cumsum(prob * centers)
-    mu_t = mu[-1]
-    sigma_b2 = (mu_t * omega - mu)**2 / (omega * (1.0 - omega) + 1e-12)
-    idx = int(np.nanargmax(sigma_b2))
-    return float(bin_edges[idx])
 
   @staticmethod
-  def _michelson_contrast01(gray):
-    t = Transform._otsu_threshold01(gray)
-    dark = gray[gray <= t]
-    bright = gray[gray > t]
-    if dark.size < 5 or bright.size < 5:
-      return 0.0
-    Imin = float(dark.mean())
-    Imax = float(bright.mean())
-    denom = (Imax + Imin)
-    if abs(denom) < 1e-12:
-      return 0.0
-    return max(0.0, (Imax - Imin) / denom)
+  def _otsu_threshold01(gray: np.ndarray) -> float:
+      """
+      Otsu threshold using scikit-image.
+      Returns t in [0,1] if input is in [0,1].
+      Handles NaNs/inf and constant images gracefully.
+      """
+
+
+      # Ensure ndarray and clip to [0,1]
+      g = np.asarray(gray, dtype=float)
+      g = np.clip(g, 0.0, 1.0)
+
+      # Remove non-finite values to avoid failures
+      g_valid = g[np.isfinite(g)]
+      if g_valid.size == 0:
+          return 0.5  # fallback: mid-gray
+
+      # If image is (almost) constant, Otsu is undefined → fallback
+      if np.isclose(g_valid.max() - g_valid.min(), 0.0):
+          return float(g_valid.mean())
+
+      # Otsu on valid data; returns threshold in same scale as g
+      t = float(threshold_otsu(g_valid))
+      # Clip just in case of numeric edge cases
+      return float(np.clip(t, 0.0, 1.0))
+
+  @staticmethod
+  def _michelson_contrast01(gray: np.ndarray) -> float:
+      """
+      Estimate Michelson contrast: (Imax - Imin) / (Imax + Imin).
+      Imin/Imax are means of pixels below/above the Otsu threshold.
+      Returns 0.0 for degenerate cases.
+      """
+      g = np.asarray(gray, dtype=float)
+      g = np.clip(g, 0.0, 1.0)
+      finite = np.isfinite(g)
+      if not finite.any():
+          return 0.0
+
+      t = Transform._otsu_threshold01(g[finite])
+
+      dark = g[(g <= t) & finite]
+      bright = g[(g >  t) & finite]
+
+      # Require a minimal sample on both sides
+      if dark.size < 5 or bright.size < 5:
+          return 0.0
+
+      Imin = float(dark.mean())
+      Imax = float(bright.mean())
+      denom = Imax + Imin
+
+      if denom <= 1e-12:
+          return 0.0
+
+      C = (Imax - Imin) / denom
+      # Bound to [0,1] to be safe
+      return float(np.clip(C, 0.0, 1.0))
+
     
-
   @staticmethod
   def LoadImg(file):
+
+    """
+        Open an image with Pillow and return (PIL.Image gray, width, height).
+        16-bit modes are preserved; 8-bit are converted to 'L'.
+        """
+    
     img = Image.open(file)
     SHAPE_x, SHAPE_y = img.size
     if img.mode in {'I;16','I;16L','I;16B','I;16N'}: # need correct format 16-bit unsigned integer pixel
@@ -135,6 +214,12 @@ class Transform:
 
   @staticmethod
   def Arrayify(img):
+
+    """
+        Convert PIL image to float64 NumPy array normalized to [0,1].
+        Handles 8-bit and 16-bit grayscale.
+        """
+
     if img.mode in {'I;16','I;16L','I;16B','I;16N'}:
       arr = np.asarray(img, dtype = np.double)/65535 # normalizing
     else:
@@ -143,11 +228,14 @@ class Transform:
 
   @staticmethod
   def Imagify(Arr):
+    """Convert a normalized [0,1] array back to an 8-bit grayscale PIL image."""
+
     img = Image.fromarray(Arr*255, mode='L')
     return img
 
   @staticmethod
   def Orientify(Arr):
+
     tl = np.average(Arr[0:2, 0:2])
     tr = np.average(Arr[0:2, -3:-1])
     bl = np.average(Arr[-3:-1, 0:2])
@@ -171,14 +259,12 @@ class Transform:
 
     return Arr, vertical # returns the array and whether it is vertical or not (1 for vertical, 0 for horizontal)
 
-"""## MTF Functions"""
+# -------------------------
+# MTF Analysis functions
+# -------------------------
 
 class MTF:
-  # distances = microns/pixels away from the slant edge
-  # values = array of brightnesses
-  # head = top limit
-  # tail = bottom limit
-
+ 
   @staticmethod
   def Center_ESF(esf_raw, esf_interp, verbose=Verbosity.NONE):
     """
@@ -207,6 +293,10 @@ class MTF:
 
   @staticmethod
   def crop(values, distances, head, tail):
+    """Crop ESF arrays to a region spanning beyond the detected transition by ~20%.
+        Handles monotonicity of the distance axis."""
+
+
     isIncrementing = True
     if distances[0] > distances[-1]:
       isIncrementing = False
@@ -234,11 +324,18 @@ class MTF:
 
   @staticmethod
   def GetESF(Arr, edgePoly, verbose = Verbosity.NONE):
+    """
+        Construct the raw ESF by projecting each pixel center onto the edge normal.
+        - `edgePoly`: [slope, intercept] of fitted line in image coords.
+        - Output distances are sorted; sign is chosen so the ESF rises across the edge.
+        """
+    
     Y = Arr.shape[0]
     X = Arr.shape[1]
 
     values = np.reshape(Arr, X*Y)
 
+    # Signed distance from each pixel center to the line
     distance = np.zeros((Y,X))
     column = np.arange(0,X) + 0.5
     for i in range(Y):
@@ -247,6 +344,7 @@ class MTF:
     distances = np.reshape(distance, X*Y)
     indexes = np.argsort(distances)
 
+    # Ensure the ESF increases from dark to bright
     sign = 1
     if np.average(values[indexes[:10]]) > np.average(values[indexes[-10:]]):
       sign = -1
@@ -254,6 +352,7 @@ class MTF:
     values = values[indexes]
     distances = sign*distances[indexes]
 
+    # Ensure distances are increasing
     if (distances[0] > distances[-1]):
       distances = np.flip(distances)
       values = np.flip(values)
@@ -278,6 +377,8 @@ class MTF:
 
   @staticmethod
   def GetESF_crop(Arr, verbose = Verbosity.NONE):
+    """Detect edge, fit line, build & crop ESF around the transition region."""
+      
     imgArr, verticality = Transform.Orientify(Arr)
     edgeImg = cv2.Canny(np.uint8(imgArr*255), 40, 90, L2gradient = True)
 
@@ -285,6 +386,7 @@ class MTF:
     edgePoly = np.polyfit(line[:,1], line[:,0], 1)
     angle = math.degrees(math.atan(-edgePoly[0]))
 
+     # Flip horizontally if the edge angle is positive (canonicalize sign)
     finalEdgePoly = edgePoly.copy()
     if angle>0:
       imgArr = np.flip(imgArr, axis = 1)
@@ -299,6 +401,7 @@ class MTF:
     max = np.amax(esf_Values)
     min = np.amin(esf_Values)
 
+    # 10% thresholds define a wide bracket around the transition
     threshold = (max - min) * 0.1
 
     head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
@@ -306,8 +409,13 @@ class MTF:
 
     width = abs(head-tail)
 
+    # Crop the ESF to a region slightly larger than the detected transition
+    # (20% margin on each side)
     esfRaw = MTF.crop(esf_Values, esf_Distances, head - 1.2*width, tail + 1.2*width)
 
+    # --- Smooth & uniformly re-sample the ESF with a cubic spline ---
+    # Knots are placed at quantiles of the raw ESF x-axis to get better
+    # coverage of the transition region (vs. uniform spacing)
     qs = np.linspace(0,1,20)[1:-1]
     knots = np.quantile(esfRaw.x, qs)
     tck = interpolate.splrep(esfRaw.x, esfRaw.y, t=knots, k=3)
@@ -347,6 +455,8 @@ class MTF:
   @staticmethod
   def Simplify_ESF(ESF, verbose=Verbosity.NONE):
 
+    """Simplify ESF by averaging y-values at identical x-values."""
+
     res = np.unique(ESF.x, return_index=True, return_counts=True)
 
     indexes = res[1]
@@ -375,6 +485,10 @@ class MTF:
 
   @staticmethod
   def GetLSF(ESF, normalize = True, verbose = Verbosity.NONE):
+
+    """Differentiate the ESF to obtain the LSF.
+       Optionally normalize the LSF so its peak is 1.0."""
+    
     lsfDividend = np.diff(ESF.y)
     lsfDivisor = np.diff(ESF.x)
 
@@ -398,6 +512,11 @@ class MTF:
 
   @staticmethod
   def GetMTF(LSF, fraction, verbose = Verbosity.NONE, beta=14):
+    """Compute the MTF from the LSF by applying a Kaiser window and FFT.
+       Interpolates the MTF onto a normalized frequency axis [0,1], where
+       0.5 = Nyquist. Returns the full MTF curve plus the frequency where
+       it crosses `fraction` (e.g. 0.5 for MTF50)."""
+    
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 

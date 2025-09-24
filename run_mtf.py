@@ -543,10 +543,10 @@ def main():
         dat_all = clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
         
         plot_mtf_vs_depth(
-                dat_all, out_base,
-                depth_col='depth_um', mtf_col='mtf50_freq',
-                y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
-            )
+            dat_all, out_base,
+            depth_col='depth_um', mtf_col='mtf50_freq',
+            y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
+        )
         
         violin_plot(
             dat_all, out_base,

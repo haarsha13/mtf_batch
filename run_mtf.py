@@ -171,7 +171,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF
                 verbosity = 0
 
             try: #Try to run MTF, if it fails, catch the error and continue
-                rep, fig2, fig1 = rs_mtf.MTF.run(
+                rep, fig = rs_mtf.MTF.run(
                     patch, FRACTION, beta=BETA,
                     plot=WRITE_FIGURES,
                     verbose=verbosity,
@@ -180,19 +180,15 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF
 
             except Exception as e: #Fail gracefully and give nan values for failed patches
                 print(f"[WARN] MTF failed on {patch_name}: {e}")
-                rep, fig2, fig1 = None, None, None
+                rep, fig = None, None
 
-            # save figure if present
+         
             fig_path = None
-            if fig1 is not None and WRITE_FIGURES:
-                fig_path = img_out_dir / f"{src_stem}_patch{i:02d}_lens_mtf.png"
-                fig1.savefig(fig_path, bbox_inches="tight", dpi=300)
-                plt.close(fig1)
-
-            if fig2 is not None and WRITE_FIGURES:
-                fig2_path = img_out_dir / f"{src_stem}_patch{i:02d}_mtf.png"
-                fig2.savefig(fig2_path, bbox_inches="tight", dpi=300)
-                plt.close(fig2)
+        
+            if fig is not None and WRITE_FIGURES:   # save figure if present
+                fig_path = img_out_dir / f"{src_stem}_patch{i:02d}_mtf.png"
+                fig.savefig(fig_path, bbox_inches="tight", dpi=300)
+                plt.close(fig)
             
             # build CSV row safely
             def _get(obj, name, default=None):

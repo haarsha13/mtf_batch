@@ -377,19 +377,19 @@ def tricontour_mtf_xy(
     outfile: str = "mtf50_xy_tricontour.png",
     outfile_delaunay: str = "delaunay_tri.png"
 ):
-    """Triangulated contour plots of MTF50 across (x_pix, y_pix) for each depth."""
+    """Triangulated contour plots of MTF50 across (x_pix, y_pix) for each depth, and Delaunay triangulation visualisation."""
     # --- clean & bounds (global color scale so panels are comparable) ---
     d0 = df.dropna(subset=[depth_col, xpixel_col, ypixel_col, mtf_col]).copy()
     d0 = _clean_plot_data(d0, depth_col, mtf_col, y_lo=0.0, y_hi=1.0)
     vmin, vmax = 0.0, 0.30
     cmap = plt.cm.viridis
 
-    depths = sorted(df[depth_col].unique())
+    depths = sorted(d0[depth_col].unique())
     n = len(depths)
     cols = min(4, n)
     rows = math.ceil(n / cols)
-    
 
+    # --- (1) Triangulated contour plots ---
     fig, axes = plt.subplots(rows, cols, figsize=(4.2*cols, 4.2*rows), dpi=150, sharex=True, sharey=True)
     axes = np.atleast_2d(axes)
 
@@ -411,14 +411,10 @@ def tricontour_mtf_xy(
 
             tri = mtri.Triangulation(x, y)
             cs = ax.tricontourf(tri, z, levels=levels, cmap=cmap, vmin=vmin, vmax=vmax)
-            # Optional: overlay mesh
-            #ax.triplot(tri, color="k", alpha=0.15, linewidth=0.3)
-
 
     # Hide any unused axes
     for ax in axes.flat[len(depths):]:
         ax.axis('off')
-
 
     # Shared colorbar
     cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
@@ -431,7 +427,10 @@ def tricontour_mtf_xy(
     fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close(fig)
 
-    # --- (5) Delaunay triangulation of all points ---
+    # --- (2) Delaunay triangulation for each depth ---
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2*cols, 4.2*rows), dpi=150, sharex=True, sharey=True)
+    axes = np.atleast_2d(axes)
+
     for ax, depth in zip(axes.flat, depths):
         di = d0[d0[depth_col] == depth]
         depth_label = str(depth)
@@ -439,11 +438,25 @@ def tricontour_mtf_xy(
         ax.set_aspect("equal", adjustable="box")
         ax.invert_yaxis()
         ax.grid(True, alpha=0.25, linewidth=0.3)
-        points = Delaunay(d0[['x_pix', 'y_pix']])
-        plt.triplot(d0['x_pix'], d0['y_pix'], points.simplices.copy())
-        plt.plot(d0['x_pix'], d0['y_pix'], 'o')
-    plt.savefig(out_base / outfile_delaunay, dpi=800, bbox_inches="tight")
-    plt.close()
+        if di.shape[0] < 3 or di[[xpixel_col, ypixel_col]].drop_duplicates().shape[0] < 3:
+            ax.text(0.5, 0.5, "not enough points", ha="center", va="center", fontsize=8, transform=ax.transAxes)
+        else:
+            x = di[xpixel_col].to_numpy(float)
+            y = di[ypixel_col].to_numpy(float)
+            points = np.column_stack([x, y])
+            tri = Delaunay(points)
+            ax.triplot(x, y, tri.simplices, color='k', linewidth=0.7)
+            ax.plot(x, y, 'o', color='tab:blue', markersize=4)
+
+    # Hide any unused axes
+    for ax in axes.flat[len(depths):]:
+        ax.axis('off')
+
+    fig.suptitle("Delaunay Triangulation of All Points by Depth", y=0.99)
+    fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
+    fig.savefig(out_base / outfile_delaunay, dpi=800, bbox_inches="tight")
+    plt.close(fig)
+
 
 def main():
     in_path = Path(INPUT)

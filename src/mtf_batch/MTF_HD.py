@@ -21,17 +21,8 @@ High-level pipeline (per image/patch)
 7) Report metrics and (optionally) plot intermediate steps (MTF.MTF_Full).
 """
 
-# -*- coding: utf-8 -*-
-"""Resolution and Sharpness of Images
 
-Original file is located at
-  https://colab.research.google.com/drive/1Dt-SLffFv1G7dlGy5o08Gmy8g_18ySrE
-
-# Resolution and Sharpness of Images
-From Damian Howe and Haarsha Krishna
-
-## Formatting Data and Classes
-"""
+# --Imports--
 
 import matplotlib.pyplot as plt
 import pylab as pylab
@@ -40,8 +31,9 @@ import cv2 as cv2
 import math as math
 import pandas as pd
 import json
+  
 
-
+from skimage.filters import threshold_otsu
 from PIL import Image, ImageOps
 from scipy import interpolate
 from scipy.fft import fft
@@ -50,35 +42,48 @@ from enum import Enum
 from pathlib import Path
 from dataclasses import dataclass
 
+
+# -------------------------
+# Data containers / enums
+# -------------------------
+
 @dataclass
 class cSet:
-  x: np.ndarray # storing indexes as a numpy array
-  y: np.ndarray # storing values as a numpy array
+  """Generic (x, y) container used for ESF and LSF arrays."""
+  x: np.ndarray # array for indexes
+  y: np.ndarray # array for values
 
 @dataclass
 class cESF:
-  rawESF: cSet # raw ESF data as numpy arrays
-  interpESF: cSet # interpolated ESF data as numpy arrays
+  """Holds both raw and interpolated ESF plus edge metadata."""
+  rawESF: cSet     # ESF from raw pixel projections
+  interpESF: cSet  # smoothed, uniformly sampled ESF
   threshold: float # threshold used for ESF/MTF
-  width: float # pixel transition size
-  angle: float # slant angle (deg)
-  edgePoly: np.ndarray # polynomial of slant
+  width: float  # pixel transition size (edge width estimate)
+  angle: float # fitted edge slant angle in degrees
+  edgePoly: np.ndarray # polynomial coeffs (slope, intercept) of fitted edge
 
 @dataclass
 class cMTF:
-  x: np.ndarray # array for indexes
-  y: np.ndarray # array for values
-  mtfAtNyquist: float # MTF value at sampling speed limit (Nyquist Freq)
-  width: float # pixel transition size
+  """Holds MTF data plus metadata."""
+  x: np.ndarray # normalized spatial frequency (0..1; Nyquist = 0.5)
+  y: np.ndarray # MTF amplitude
+  mtfAtNyquist: float  # MTF value at f=0.5, stored as *percent* inside this struct
+  width: float # pixel transition size (passed-through; not recomputed)
 
 @dataclass
-class Verbosity(Enum): # output types/level of output
+class Verbosity(Enum): 
+  """Verbosity levels for console output and plotting."""
   NONE = 0 # none
   BRIEF = 1 # text
   DETAIL = 2 # graphical
 
 @dataclass
 class MTFReport:
+    """
+    Final analysis bundle for a given image patch.
+    Contains image info, ESF/LSF arrays, and the MTF curve + key metrics.
+    """
     filename: str                    # source image filename
     image_w: int                     # image dimension width (pixels)    
     image_h: int                     # image dimension height (pixels)
@@ -96,26 +101,46 @@ class MTFReport:
     lsf_x: np.ndarray                # optional: LSF x
     lsf_y: np.ndarray                # optional: LSF y
 
-"""## Image importing Functions"""
+
+# -------------------------
+# Image / transform utils
+# --
 
 class Transform:
 
   @staticmethod
   def _raw_edge_angle_deg(arr01):
-    a = np.asarray(arr01, dtype=float)
+
+    """
+        Estimate the dominant edge angle (degrees) in an image by Canny-detecting
+        edge pixels and fitting a line y = m*x + b (via polyfit).
+
+        Input must be grayscale in [0,1] (function will normalize if needed).
+        Returns 0.0 if too few edge pixels are found.
+        """
+    
+    a = np.asarray(arr01, dtype=float) # ensure a NumPy float array
     if a.max() > 1.0:  # normalize if not already 0..1
       a = a / 255.0
-    a = np.squeeze(a)
+
+    a = np.squeeze(a)  # drop any singleton dimensions
+
     if a.ndim == 3 and a.shape[2] >= 3:
-      # luminance
+      # Convert RGB to luma (Rec. 709 coefficients)
       a = 0.2126*a[...,0] + 0.7152*a[...,1] + 0.0722*a[...,2]
     edgeImg = cv2.Canny(np.uint8(np.clip(a,0,1)*255), 40, 90, L2gradient=True)
     line = np.argwhere(edgeImg == 255)
     if line.size < 2:
       return 0.0
-    edgePoly = np.polyfit(line[:,1], line[:,0], 1) # y = mx + b, a polynomial for the edge
-    angle = math.degrees(math.atan(-edgePoly[0])) # angle of the edge in degrees
+    
+    #Fit y = mx + b in image coords
+    edgePoly = np.polyfit(line[:,1], line[:,0], 1)
+
+    # Convert slope to to angle in degrees.
+    # Image rows increase downwards, so invert sign.
+    angle = math.degrees(math.atan(-edgePoly[0]))
     return float(angle) 
+
 
   @staticmethod
   def _otsu_threshold01(gray: np.ndarray) -> float:
@@ -124,6 +149,8 @@ class Transform:
       Returns t in [0,1] if input is in [0,1].
       Handles NaNs/inf and constant images gracefully.
       """
+
+
       # Ensure ndarray and clip to [0,1]
       g = np.asarray(gray, dtype=float)
       g = np.clip(g, 0.0, 1.0)
@@ -143,22 +170,47 @@ class Transform:
       return float(np.clip(t, 0.0, 1.0))
 
   @staticmethod
-  def _michelson_contrast01(gray):
-    t = Transform._otsu_threshold01(gray)
-    dark = gray[gray <= t]
-    bright = gray[gray > t]
-    if dark.size < 5 or bright.size < 5:
-      return 0.0
-    Imin = float(dark.mean())
-    Imax = float(bright.mean())
-    denom = (Imax + Imin)
-    if abs(denom) < 1e-12:
-      return 0.0
-    return max(0.0, (Imax - Imin) / denom)
-    
+  def _michelson_contrast01(gray: np.ndarray) -> float:
+      """
+      Estimate Michelson contrast: (Imax - Imin) / (Imax + Imin).
+      Imin/Imax are means of pixels below/above the Otsu threshold.
+      Returns 0.0 for degenerate cases.
+      """
+      g = np.asarray(gray, dtype=float)
+      g = np.clip(g, 0.0, 1.0)
+      finite = np.isfinite(g)
+      if not finite.any():
+          return 0.0
 
+      t = Transform._otsu_threshold01(g[finite])
+
+      dark = g[(g <= t) & finite]
+      bright = g[(g >  t) & finite]
+
+      # Require a minimal sample on both sides
+      if dark.size < 5 or bright.size < 5:
+          return 0.0
+
+      Imin = float(dark.mean())
+      Imax = float(bright.mean())
+      denom = Imax + Imin
+
+      if denom <= 1e-12:
+          return 0.0
+
+      C = (Imax - Imin) / denom
+      # Bound to [0,1] to be safe
+      return float(np.clip(C, 0.0, 1.0))
+
+    
   @staticmethod
   def LoadImg(file):
+
+    """
+        Open an image with Pillow and return (PIL.Image gray, width, height).
+        16-bit modes are preserved; 8-bit are converted to 'L'.
+        """
+    
     img = Image.open(file)
     SHAPE_x, SHAPE_y = img.size
     if img.mode in {'I;16','I;16L','I;16B','I;16N'}: # need correct format 16-bit unsigned integer pixel
@@ -169,6 +221,12 @@ class Transform:
 
   @staticmethod
   def Arrayify(img):
+
+    """
+        Convert PIL image to float64 NumPy array normalized to [0,1].
+        Handles 8-bit and 16-bit grayscale.
+        """
+
     if img.mode in {'I;16','I;16L','I;16B','I;16N'}:
       arr = np.asarray(img, dtype = np.double)/65535 # normalizing
     else:
@@ -177,11 +235,14 @@ class Transform:
 
   @staticmethod
   def Imagify(Arr):
+    """Convert a normalized [0,1] array back to an 8-bit grayscale PIL image."""
+
     img = Image.fromarray(Arr*255, mode='L')
     return img
 
   @staticmethod
   def Orientify(Arr):
+
     tl = np.average(Arr[0:2, 0:2])
     tr = np.average(Arr[0:2, -3:-1])
     bl = np.average(Arr[-3:-1, 0:2])
@@ -205,14 +266,12 @@ class Transform:
 
     return Arr, vertical # returns the array and whether it is vertical or not (1 for vertical, 0 for horizontal)
 
-"""## MTF Functions"""
+# -------------------------
+# MTF Analysis functions
+# -------------------------
 
 class MTF:
-  # distances = microns/pixels away from the slant edge
-  # values = array of brightnesses
-  # head = top limit
-  # tail = bottom limit
-
+ 
   @staticmethod
   def Center_ESF(esf_raw, esf_interp, verbose=Verbosity.NONE):
     """
@@ -241,6 +300,10 @@ class MTF:
 
   @staticmethod
   def crop(values, distances, head, tail):
+    """Crop ESF arrays to a region spanning beyond the detected transition by ~20%.
+        Handles monotonicity of the distance axis."""
+
+
     isIncrementing = True
     if distances[0] > distances[-1]:
       isIncrementing = False
@@ -268,11 +331,18 @@ class MTF:
 
   @staticmethod
   def GetESF(Arr, edgePoly, verbose = Verbosity.NONE):
+    """
+        Construct the raw ESF by projecting each pixel center onto the edge normal.
+        - `edgePoly`: [slope, intercept] of fitted line in image coords.
+        - Output distances are sorted; sign is chosen so the ESF rises across the edge.
+        """
+    
     Y = Arr.shape[0]
     X = Arr.shape[1]
 
     values = np.reshape(Arr, X*Y)
 
+    # Signed distance from each pixel center to the line
     distance = np.zeros((Y,X))
     column = np.arange(0,X) + 0.5
     for i in range(Y):
@@ -281,6 +351,7 @@ class MTF:
     distances = np.reshape(distance, X*Y)
     indexes = np.argsort(distances)
 
+    # Ensure the ESF increases from dark to bright
     sign = 1
     if np.average(values[indexes[:10]]) > np.average(values[indexes[-10:]]):
       sign = -1
@@ -288,6 +359,7 @@ class MTF:
     values = values[indexes]
     distances = sign*distances[indexes]
 
+    # Ensure distances are increasing
     if (distances[0] > distances[-1]):
       distances = np.flip(distances)
       values = np.flip(values)
@@ -312,6 +384,8 @@ class MTF:
 
   @staticmethod
   def GetESF_crop(Arr, verbose = Verbosity.NONE):
+    """Detect edge, fit line, build & crop ESF around the transition region."""
+      
     imgArr, verticality = Transform.Orientify(Arr)
     edgeImg = cv2.Canny(np.uint8(imgArr*255), 40, 90, L2gradient = True)
 
@@ -319,6 +393,7 @@ class MTF:
     edgePoly = np.polyfit(line[:,1], line[:,0], 1)
     angle = math.degrees(math.atan(-edgePoly[0]))
 
+     # Flip horizontally if the edge angle is positive (canonicalize sign)
     finalEdgePoly = edgePoly.copy()
     if angle>0:
       imgArr = np.flip(imgArr, axis = 1)
@@ -333,6 +408,7 @@ class MTF:
     max = np.amax(esf_Values)
     min = np.amin(esf_Values)
 
+    # 10% thresholds define a wide bracket around the transition
     threshold = (max - min) * 0.1
 
     head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
@@ -340,8 +416,13 @@ class MTF:
 
     width = abs(head-tail)
 
+    # Crop the ESF to a region slightly larger than the detected transition
+    # (20% margin on each side)
     esfRaw = MTF.crop(esf_Values, esf_Distances, head - 1.2*width, tail + 1.2*width)
 
+    # --- Smooth & uniformly re-sample the ESF with a cubic spline ---
+    # Knots are placed at quantiles of the raw ESF x-axis to get better
+    # coverage of the transition region (vs. uniform spacing)
     qs = np.linspace(0,1,20)[1:-1]
     knots = np.quantile(esfRaw.x, qs)
     tck = interpolate.splrep(esfRaw.x, esfRaw.y, t=knots, k=3)
@@ -381,6 +462,8 @@ class MTF:
   @staticmethod
   def Simplify_ESF(ESF, verbose=Verbosity.NONE):
 
+    """Simplify ESF by averaging y-values at identical x-values."""
+
     res = np.unique(ESF.x, return_index=True, return_counts=True)
 
     indexes = res[1]
@@ -409,6 +492,10 @@ class MTF:
 
   @staticmethod
   def GetLSF(ESF, normalize = True, verbose = Verbosity.NONE):
+
+    """Differentiate the ESF to obtain the LSF.
+       Optionally normalize the LSF so its peak is 1.0."""
+    
     lsfDividend = np.diff(ESF.y)
     lsfDivisor = np.diff(ESF.x)
 
@@ -432,27 +519,37 @@ class MTF:
 
   @staticmethod
   def GetMTF(LSF, fraction, verbose = Verbosity.NONE, beta=14):
+    """Compute the MTF from the LSF by applying a Kaiser window and FFT.
+       Interpolates the MTF onto a normalized frequency axis [0,1], where
+       0.5 = Nyquist. Returns the full MTF curve plus the frequency where
+       it crosses `fraction` (e.g. 0.5 for MTF50)."""
+    
+    # --- Apply Kaiser window to LSF to reduce spectral leakage ---
     N = np.size(LSF.x)
     px = N/(LSF.x[-1]- LSF.x[0])
 
+    # Kaiser window
     window = windows.kaiser(N,beta=beta)
     windowed_y = LSF.y * window
 
+    # --- FFT to get MTF ---
     values = 1/np.sum(windowed_y)*abs(fft(windowed_y))
 
-    #values = 1/np.sum(LSF.y)*abs(fft(LSF.y))
-    
+    # Keep only the first half (real-valued input → symmetric FFT)
     distances = np.arange(0,N)/N*px
 
+    # Normalize spatial frequency to [0,1], where 0.5 = Nyquist
     interpDistances = np.linspace(0,1,200)
     interp = interpolate.interp1d(distances, values, kind='cubic')
     interpValues = interp(interpDistances)
     valueAtNyquist = float(interp(0.5)) * 100
 
+    # --- Find frequency where MTF crosses `fraction` ---
     target = fraction
-
+  
     crossing_idx = np.where(interpValues <= fraction)[0]
 
+    # Find the first crossing index
     if len(crossing_idx) > 0:
         i = crossing_idx[0]
         # Linear interpolation for better accuracy
@@ -462,7 +559,7 @@ class MTF:
     else:
         cutoff_freq = None
 
-
+    # --- Verbose output ---
     if (verbose == Verbosity.BRIEF):
       print(f"MTF [done]")
     elif (verbose == Verbosity.DETAIL):
@@ -470,63 +567,66 @@ class MTF:
       fig.canvas.manager.set_window_title(f"MTF ({0:2.2f}% at Nyquist)".format(valueAtNyquist))
       (ax1) = plt.subplots(1)
       ax1.plot(interpDistances, interpValues)
+      plt.show(block = False)
       plt.show()
-      plt.show(block=False)
-
     return cMTF(interpDistances, interpValues, valueAtNyquist, -1.0), cutoff_freq, windowed_y, window
 
   @staticmethod
-  def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE):
+  def MTF_Full(imgArr_orig, fraction, w=None, h=None, verbose=Verbosity.NONE, beta=14):
+    """Full MTF analysis with optional plotting of all steps.
+       Returns the final MTF struct."""
     
+    # --- Preprocess image ---
     contrast = Transform._michelson_contrast01(imgArr_orig)
     imgArr, verticality = Transform.Orientify(imgArr_orig)
     w, h = imgArr.shape[0], imgArr.shape[1]
     esf = MTF.GetESF_crop(imgArr, Verbosity.DETAIL)  # so you see raw ESF plot
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.DETAIL)  # see LSF plot
-    mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL, beta=14)  # see MTF plot
+    mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL, beta=beta)  # see MTF plot
 
+    # --- Final verbose plot with all steps ---
     if verticality > 0:
         verticality = "Vertical"
     else:
         verticality = "Horizontal"
 
     if (verbose == Verbosity.DETAIL):
+       
+        # MTF_lens = [] # The ghost of the theoretical lens MTF calculations attempt.
+        # FREQUENCY = []
+        # for i in range(len(mtf.y)):
+        #   pix_size = 3.2*10**(-3) #mm
+        #   x = mtf.x[i]
+        #   y = mtf.y[i]
 
-        MTF_lens = []
-        FREQUENCY = []
-        for i in range(len(mtf.y)):
+        #   f_nyq = (1/(2*pix_size)) #lp/mm
+        #   freqs = x/f_nyq
+        #   MTF_detec = float(np.abs(np.sinc(freqs)))
+
+        #   if MTF_detec < 1e-3:
+        #     MTF_detec = 1e-3 # to avoid division by zero
           
-          x = mtf.x[i]
-          y = mtf.y[i]
-
-          f_nyq = 1 #Normalized Nyquist Frequency
-          freqs = x/f_nyq
-          MTF_detec = float(np.abs(np.sinc(freqs)))
-
-          if MTF_detec < 1e-3:
-            MTF_detec = 1e-3 # to avoid division by zero
+        #   MTF_sys = float(y)
+        #   lens = MTF_sys/MTF_detec
+        #   lens = np.clip(lens, 0, 1)
           
-          MTF_sys = float(y)
-          lens = MTF_sys/MTF_detec
-          lens = np.clip(lens, 0, 1)
-          
-          MTF_lens.append(lens)
-          FREQUENCY.append(freqs)
+        #   MTF_lens.append(lens)
+        #   FREQUENCY.append(freqs)
 
-        FREQUENCY = np.array(FREQUENCY) 
-        MTF_lens = np.array(MTF_lens)
+        # FREQUENCY = np.array(FREQUENCY) 
+        # MTF_lens = np.array(MTF_lens)
 
-        fig1 = plt.figure(figsize=(6,4)) # new figure so it's not reusing gcf()
+        # fig1 = plt.figure(figsize=(6,4)) # new figure so it's not reusing gcf()
         
-        plt.plot(FREQUENCY, MTF_lens, label='Lens MTF', color='green')
-        plt.xlabel("Spatial Frequency (cyc/pixel)")
-        plt.ylabel("Theoretical Lens MTF")
-        plt.title("Theoretical Lens MTF Curve")
-        plt.grid(True, alpha=0.4)
-        plt.close(fig1)
+        # plt.plot(FREQUENCY, MTF_lens, label='Lens MTF', color='green')
+        # plt.xlabel("Spatial Frequency (cyc/pixel)")
+        # plt.ylabel("Theoretical Lens MTF")
+        # plt.title("Theoretical Lens MTF Curve")
+        # plt.grid(True, alpha=0.4)
+        # plt.close(fig1)
 
-
-        fig2 = plt.figure(figsize=(8,6)) # new figure so it's not reusing gcf()
+       
+       plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
 
         x = [0, np.size(imgArr,1)-1]
         y = np.polyval(esf.edgePoly, x)
@@ -537,11 +637,15 @@ class MTF:
         ax3 = plt.subplot(gs[2, 0])
         ax4 = plt.subplot(gs[:, 1])
 
+
+        # Plot original image
         ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
         ax1.plot(x, y, color='red', label = 'Edge After Orientation')
         ax1.axis('off')
         ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
         ax1.legend(loc='lower left', fontsize=5)
+
+        # Plot raw and smoothed ESF
         ax2.plot(esf.rawESF.x, esf.rawESF.y,
                  esf.interpESF.x, esf.interpESF.y)
         top = np.max(esf.rawESF.y)-esf.threshold
@@ -553,6 +657,7 @@ class MTF:
         ax2.grid(True)
         ax2.minorticks_on()
 
+        # Plot windowed LSF
         ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
         ax3.xaxis.set_visible(True)
         ax3.yaxis.set_visible(True)
@@ -560,6 +665,7 @@ class MTF:
         ax3.minorticks_on()
         ax3.legend(loc='upper right', fontsize=5)
 
+        # Plot MTF
         ax4.plot(mtf.x, mtf.y)
         ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.3f}\nMTF at Nyquist: {mtf.mtfAtNyquist/100:0.5f}")
         ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
@@ -573,23 +679,26 @@ class MTF:
         ax4.minorticks_on()
 
         plt.tight_layout()
-        
-    if verbose == Verbosity.DETAIL:
-       return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width), fig2, fig1
-    else:
-       return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width), fig2, None
+    return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
   @staticmethod
-  def analyze(imgArr, filename="", fraction=0.5, beta=14):
-    """Pure analysis (metrics+arrays), no plotting."""
+  def analyze(imgArr, filename="", fraction=0.5 , beta=14):
+
+    """Perform MTF analysis and return an MTFReport.
+       This is the core function that does not plot anything.
+       Use MTF.run() to get both the report and (optionally) the plots."""
+
+    # --- Preprocess image ---
     contrast = Transform._michelson_contrast01(imgArr)
     imgArr2, verticality = Transform.Orientify(imgArr)
     w, h = imgArr2.shape[0], imgArr2.shape[1]
 
+    # --- MTF analysis ---
     esf = MTF.GetESF_crop(imgArr2, Verbosity.NONE)
     lsf = MTF.GetLSF(esf.interpESF, True, Verbosity.NONE)
     mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE, beta=beta)
 
+    # --- Package results ---
     edge_profile = "Vertical" if verticality > 0 else "Horizontal"
     mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
 
@@ -621,12 +730,11 @@ class MTF:
         """
         rep = MTF.analyze(imgArr, filename=filename, fraction=fraction, beta=beta)
 
-        fig2 = None
-        fig1 = None
-
+        fig = None
         if plot:
             # reuse your existing full-figure function
-            _data_, fig2, fig1 = MTF.MTF_Full(imgArr, fraction, verbose=verbose)
-            plt.close(fig2)  # avoid showing it now; caller can show if they want
+            MTF.MTF_Full(imgArr, fraction, verbose=verbose, beta=beta)
+            import matplotlib.pyplot as plt
+            fig = plt.gcf()
     
-        return rep, fig2, fig1
+        return rep, fig

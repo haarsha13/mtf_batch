@@ -628,57 +628,57 @@ class MTF:
        
        plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
 
-        x = [0, np.size(imgArr,1)-1]
-        y = np.polyval(esf.edgePoly, x)
+       x = [0, np.size(imgArr,1)-1]
+       y = np.polyval(esf.edgePoly, x)
 
-        gs = plt.GridSpec(3, 2)
-        ax1 = plt.subplot(gs[0, 0])
-        ax2 = plt.subplot(gs[1, 0])
-        ax3 = plt.subplot(gs[2, 0])
-        ax4 = plt.subplot(gs[:, 1])
+       gs = plt.GridSpec(3, 2)
+       ax1 = plt.subplot(gs[0, 0])
+       ax2 = plt.subplot(gs[1, 0])
+       ax3 = plt.subplot(gs[2, 0])
+       ax4 = plt.subplot(gs[:, 1])
 
 
-        # Plot original image
-        ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
-        ax1.plot(x, y, color='red', label = 'Edge After Orientation')
-        ax1.axis('off')
-        ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
-        ax1.legend(loc='lower left', fontsize=5)
+       # Plot original image
+       ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
+       ax1.plot(x, y, color='red', label = 'Edge After Orientation')
+       ax1.axis('off')
+       ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
+       ax1.legend(loc='lower left', fontsize=5)
 
-        # Plot raw and smoothed ESF
-        ax2.plot(esf.rawESF.x, esf.rawESF.y,
-                 esf.interpESF.x, esf.interpESF.y)
-        top = np.max(esf.rawESF.y)-esf.threshold
-        bot = np.min(esf.rawESF.y)+esf.threshold
-        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
-        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
-        ax2.xaxis.set_visible(True)
-        ax2.yaxis.set_visible(True)
-        ax2.grid(True)
-        ax2.minorticks_on()
+       # Plot raw and smoothed ESF
+       ax2.plot(esf.rawESF.x, esf.rawESF.y,
+                esf.interpESF.x, esf.interpESF.y)
+       top = np.max(esf.rawESF.y)-esf.threshold
+       bot = np.min(esf.rawESF.y)+esf.threshold
+       ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
+       ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
+       ax2.xaxis.set_visible(True)
+       ax2.yaxis.set_visible(True)
+       ax2.grid(True)
+       ax2.minorticks_on()
 
-        # Plot windowed LSF
-        ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
-        ax3.xaxis.set_visible(True)
-        ax3.yaxis.set_visible(True)
-        ax3.grid(True)
-        ax3.minorticks_on()
-        ax3.legend(loc='upper right', fontsize=5)
+       # Plot windowed LSF
+       ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
+       ax3.xaxis.set_visible(True)
+       ax3.yaxis.set_visible(True)
+       ax3.grid(True)
+       ax3.minorticks_on()
+       ax3.legend(loc='upper right', fontsize=5)
 
-        # Plot MTF
-        ax4.plot(mtf.x, mtf.y)
-        ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.3f}\nMTF at Nyquist: {mtf.mtfAtNyquist/100:0.5f}")
-        ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
-        ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{fraction*100} Frequency', ms=3)
-        ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.3f} degrees", ha='left', va='top')
-        ax4.text(0.5, 0.94, f"Width: {esf.width:0.3f} pixels", ha='left', va='top')
-        ax4.text(0.5, 0.89, f"Threshold: {esf.threshold:0.3f}", ha='left', va='top')
-        ax4.text(0.5, 0.84, f"Contrast: {contrast*100:0.1f}%", ha='left', va='top')
-        ax4.set_xlabel('Normalized Frequency')
-        ax4.set_ylabel('MTF Value')
-        ax4.minorticks_on()
+       # Plot MTF
+       ax4.plot(mtf.x, mtf.y)
+       ax4.set_title(f"MTF{int(fraction*100)}: {cutoff_freq:0.3f}\nMTF at Nyquist: {mtf.mtfAtNyquist/100:0.5f}")
+       ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
+       ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{fraction*100} Frequency', ms=3)
+       ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.3f} degrees", ha='left', va='top')
+       ax4.text(0.5, 0.94, f"Width: {esf.width:0.3f} pixels", ha='left', va='top')
+       ax4.text(0.5, 0.89, f"Threshold: {esf.threshold:0.3f}", ha='left', va='top')
+       ax4.text(0.5, 0.84, f"Contrast: {contrast*100:0.1f}%", ha='left', va='top')
+       ax4.set_xlabel('Normalized Frequency')
+       ax4.set_ylabel('MTF Value')
+       ax4.minorticks_on()
 
-        plt.tight_layout()
+       plt.tight_layout()
     return cMTF(mtf.x, mtf.y, mtf.mtfAtNyquist, esf.width)
 
   @staticmethod
@@ -734,7 +734,6 @@ class MTF:
         if plot:
             # reuse your existing full-figure function
             MTF.MTF_Full(imgArr, fraction, verbose=verbose, beta=beta)
-            import matplotlib.pyplot as plt
             fig = plt.gcf()
     
         return rep, fig

@@ -49,8 +49,8 @@ WRITE_FIGURES = True      # save MTF plot per patch?
 SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the summary of all data. 
 
 # --- quick runner toggle ---
-TOGGLE_RUN_MTF = False    # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
-USE_EXISTING_CSV = False# True => read CSV and only make plots; False => run full pipeline
+TOGGLE_RUN_MTF = True    # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
+USE_EXISTING_CSV = False # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
 
@@ -529,7 +529,7 @@ def main():
             print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
 
-    # If True , bypasses hyper target , and runs MTF to produce summary csv and plots only
+    # If True  and runs MTF to produce summary csv and plots only
     if TOGGLE_RUN_MTF is True: 
         if all_rows:
             summary_csv = out_base / SUMMARY_CSV

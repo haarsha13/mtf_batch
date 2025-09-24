@@ -118,18 +118,29 @@ class Transform:
     return float(angle) 
 
   @staticmethod
-  def _otsu_threshold01(gray):
-    g = np.clip(gray, 0.0, 1.0)
-    hist, bin_edges = np.histogram(g.ravel(), bins=256, range=(0.0, 1.0))
-    hist = hist.astype(float)
-    prob = hist / (hist.sum() + 1e-12)
-    omega = np.cumsum(prob)
-    centers = bin_edges[:-1] + (bin_edges[1]-bin_edges[0])/2.0
-    mu = np.cumsum(prob * centers)
-    mu_t = mu[-1]
-    sigma_b2 = (mu_t * omega - mu)**2 / (omega * (1.0 - omega) + 1e-12)
-    idx = int(np.nanargmax(sigma_b2))
-    return float(bin_edges[idx])
+  def _otsu_threshold01(gray: np.ndarray) -> float:
+      """
+      Otsu threshold using scikit-image.
+      Returns t in [0,1] if input is in [0,1].
+      Handles NaNs/inf and constant images gracefully.
+      """
+      # Ensure ndarray and clip to [0,1]
+      g = np.asarray(gray, dtype=float)
+      g = np.clip(g, 0.0, 1.0)
+
+      # Remove non-finite values to avoid failures
+      g_valid = g[np.isfinite(g)]
+      if g_valid.size == 0:
+          return 0.5  # fallback: mid-gray
+
+      # If image is (almost) constant, Otsu is undefined → fallback
+      if np.isclose(g_valid.max() - g_valid.min(), 0.0):
+          return float(g_valid.mean())
+
+      # Otsu on valid data; returns threshold in same scale as g
+      t = float(threshold_otsu(g_valid))
+      # Clip just in case of numeric edge cases
+      return float(np.clip(t, 0.0, 1.0))
 
   @staticmethod
   def _michelson_contrast01(gray):

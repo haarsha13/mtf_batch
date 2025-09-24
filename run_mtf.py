@@ -38,7 +38,7 @@ FILENAME_GLOB = "*.png"
 ORGANIZE_BY_SUB = True
 
 # Patch controls
-PATCH_SIZE = 256          # square crop (pixels) around each slant center
+PATCH_SIZE = 255          # square crop (pixels) around each slant center
 MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
 SAVE_PER_IMAGE_MANIFEST = True  # save CSV of each patch centers per image?
 
@@ -216,7 +216,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF
       pd.DataFrame(manifest).to_csv(img_out_dir / "patch_index.csv", index=False)
 
     return rows
-def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0, edge_profile_col='edge_profile'):
+def clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0, edge_profile_col='edge_profile'):
     """Minimal cleaning for plots."""
     d = df.dropna(subset=[depth_col, mtf_col, edge_profile_col]).copy()
     d = d[(d[mtf_col] > 0) & (d[mtf_col] < 1)]
@@ -224,13 +224,13 @@ def _clean_plot_data(df, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y
     return d
 
 
-def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
+def plot_mtf_vs_depth(df: pd.DataFrame, out_base: Path,
                         depth_col: str = 'depth_um',
                         mtf_col: str = 'mtf50_freq',
                         y_lo: float = 0.0, y_hi: float = 1.0,
                         outfile: str = "mtf50_vs_depth.png"):
     """Scatter: all points (after simple clean/filter). Uses default figsize."""
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
+    d = clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
     if d.empty:
         print("No data to plot for scatter.")
         return
@@ -257,7 +257,7 @@ def plot_mtf50_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.close()
 
 
-def plot_mtf50_violins_with_topmedian_zoom(
+def violin_plot(
     df: pd.DataFrame, out_base: Path,
     depth_col: str = "depth_um",
     mtf_col: str = "mtf50_freq",
@@ -266,8 +266,8 @@ def plot_mtf50_violins_with_topmedian_zoom(
     zoom_outfile: str = "mtf50_violin_zoom_topmedian.png",
     depth_window: float = None
 ):
-    # quick clean (assumes your _clean_plot_data exists; otherwise inline similar)
-    d = _clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
+    # quick clean (assumes your clean_plot_data exists; otherwise inline similar)
+    d = clean_plot_data(df, depth_col, mtf_col, y_lo, y_hi)
     if d.empty:
         print("No data to plot.")
         return
@@ -278,22 +278,24 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.figure(figsize=(max(6, len(np.unique(d[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d, x=depth_col, y=mtf_col, order=order, cut=0, inner="box", density_norm="width", bw_method=0.2, width=0.9, linewidth=1)
     ax = plt.gca()
-
     xtick_indices = [i for i, v in enumerate(order) if abs(float(v) % 20) < 1e-9]
     ax.set_xticks(xtick_indices)
     ax.set_xticklabels([str(int(v)) for v in order if abs(float(v) % 20) < 1e-9], rotation=90)
-
+    plt.title("MTF50 Distribution vs Depth")
     plt.tight_layout()
     plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
     plt.close()
 
-    # --- top-median depth ---
+
+    # --- (2) for zoom near top-median depth ---
+
+    # top-median depth 
     med = d.groupby(depth_col, sort=False)[mtf_col].median()
     top_depth = med.idxmax()
     top_median = float(med.loc[top_depth])
 
-    # --- (2) zoom selection ---
+    # zoom selection around top_depth
     # Set depth_window as 0.2 * top_depth if not provided and top_depth is numeric
     if depth_window is None:
         try:
@@ -324,7 +326,7 @@ def plot_mtf50_violins_with_topmedian_zoom(
     plt.close()
 
 
-def plot_scatter(df: pd.DataFrame, out_base: Path, depth_col: str = "depth_um",
+def plot_mtf_vs_xy(df: pd.DataFrame, out_base: Path, depth_col: str = "depth_um",
     mtf_col: str = "mtf50_freq", xpixel_col: str = "x_pix", ypixel_col: str = "y_pix", outfile: str = "mtf50_x_y_scatter.png"):
 
     # --- (3) scatter by depth ---
@@ -367,7 +369,7 @@ def plot_scatter(df: pd.DataFrame, out_base: Path, depth_col: str = "depth_um",
 
 
 
-def tricontour_mtf_xy(
+def tricontour_mtf_vs_xy(
     df: pd.DataFrame, out_base: Path,
     depth_col: str = "depth_um",
     mtf_col: str = "mtf50_freq",
@@ -380,7 +382,7 @@ def tricontour_mtf_xy(
     """Triangulated contour plots of MTF50 across (x_pix, y_pix) for each depth, and Delaunay triangulation visualisation."""
     # --- clean & bounds (global color scale so panels are comparable) ---
     d0 = df.dropna(subset=[depth_col, xpixel_col, ypixel_col, mtf_col]).copy()
-    d0 = _clean_plot_data(d0, depth_col, mtf_col, y_lo=0.0, y_hi=1.0)
+    d0 = clean_plot_data(d0, depth_col, mtf_col, y_lo=0.0, y_hi=1.0)
     vmin, vmax = 0.0, 0.30
     cmap = plt.cm.viridis
 
@@ -466,7 +468,7 @@ def main():
     # Where to read/write the summary CSV
     summary_csv = Path(CSV_OVERRIDE_PATH) if CSV_OVERRIDE_PATH else (out_base / SUMMARY_CSV)
 
-    # ---------------- PLOTS-ONLY FAST PATH ----------------
+    # If True, skip image processing and MTF, just read existing CSV and make plots
     if USE_EXISTING_CSV:
         if not summary_csv.exists():
             print(f"[WARN] Requested plots-only path but CSV not found: {summary_csv}")
@@ -474,13 +476,13 @@ def main():
         else:
             print(f"[PLOTS-ONLY] Reading: {summary_csv}")
             dat_all = pd.read_csv(summary_csv)
-            dat_all = _clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
-            plot_mtf50_vs_depth(
+            dat_all = clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
+            plot_mtf_vs_depth(
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
             )
-            plot_mtf50_violins_with_topmedian_zoom(
+            violin_plot(
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 y_lo=0.0, y_hi=0.5,
@@ -488,14 +490,14 @@ def main():
                 zoom_outfile="mtf50_violin_zoom_topmedian.png"
             )
 
-            plot_scatter(
+            plot_mtf_vs_xy(
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 xpixel_col='x_pix', ypixel_col='y_pix',
                 outfile="mtf50_x_y_scatter.png"
             )
 
-            tricontour_mtf_xy(
+            tricontour_mtf_vs_xy(
                 dat_all, out_base,
                 depth_col='depth_um', mtf_col='mtf50_freq',
                 xpixel_col='x_pix', ypixel_col='y_pix',
@@ -526,7 +528,8 @@ def main():
             print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
 
-    if TOGGLE_RUN_MTF is True: #If MTF was run, save the summary CSV and make plots
+    # If True , bypasses hyper target , and runs MTF to produce summary csv and plots only
+    if TOGGLE_RUN_MTF is True: 
         if all_rows:
             summary_csv = out_base / SUMMARY_CSV
             dat_all = pd.DataFrame(all_rows)
@@ -536,34 +539,35 @@ def main():
         dat_all = pd.DataFrame(all_rows)
         dat_all.to_csv(summary_csv, index=False)
         print(f"\nSummary CSV → {summary_csv}")
-        dat_all = _clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
+        dat_all = clean_plot_data(dat_all, depth_col='depth_um', mtf_col='mtf50_freq', y_lo=0.0, y_hi=1.0)
         
-        # Make plots from the DataFrame we just created
-        plot_mtf50_vs_depth(
+        plot_mtf_vs_depth(
+                dat_all, out_base,
+                depth_col='depth_um', mtf_col='mtf50_freq',
+                y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
+            )
+        
+        violin_plot(
             dat_all, out_base,
             depth_col='depth_um', mtf_col='mtf50_freq',
-            y_lo=0.0, y_hi=0.5, outfile="mtf50_vs_depth.png"
-        )
-        
-        plot_mtf50_violins_with_topmedian_zoom(
-        dat_all, out_base,
-        depth_col="depth_um", mtf_col="mtf50_freq",
-        y_lo=0.0, y_hi=0.5, depth_window=50.0
+            y_lo=0.0, y_hi=0.5,
+            all_outfile="mtf50_violin_all.png",
+            zoom_outfile="mtf50_violin_zoom_topmedian.png"
         )
 
-        plot_scatter(
-                dat_all, out_base,
-                depth_col='depth_um', mtf_col='mtf50_freq',
-                xpixel_col='x_pix', ypixel_col='y_pix',
-                outfile="mtf50_x_y_scatter.png"
-            )
-        
-        tricontour_mtf_xy(
-                dat_all, out_base,
-                depth_col='depth_um', mtf_col='mtf50_freq',
-                xpixel_col='x_pix', ypixel_col='y_pix',
-                levels=30, outfile="mtf50_xy_tricontour.png", outfile_delaunay="delaunay_tri.png"
-            )
+        plot_mtf_vs_xy(
+            dat_all, out_base,
+            depth_col='depth_um', mtf_col='mtf50_freq',
+            xpixel_col='x_pix', ypixel_col='y_pix',
+            outfile="mtf50_x_y_scatter.png"
+        )
+
+        tricontour_mtf_vs_xy(
+            dat_all, out_base,
+            depth_col='depth_um', mtf_col='mtf50_freq',
+            xpixel_col='x_pix', ypixel_col='y_pix',
+            levels=30, outfile="mtf50_xy_tricontour.png", outfile_delaunay="delaunay_tri.png"
+        )
 
 
 if __name__ == "__main__":

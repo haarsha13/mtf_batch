@@ -41,6 +41,9 @@ ORGANIZE_BY_SUB = True
 PATCH_SIZE = 255          # square crop (pixels) around each slant center
 MAX_PATCHES = None        # e.g., 12 to limit per image; None = all
 SAVE_PER_IMAGE_MANIFEST = True  # save CSV of each patch centers per image?
+LENS_FOCAL_LEN = int(420)         # focal length of lens in mm
+COLLIMATOR_FOCAL_LEN = int(2000)        # focal length of collimator in mm
+SENSOR_PIX_SIZE = float(3.2e-3) # sensor pixel size in mm (e.g., 3.2e-3 for 3.2µm pixels)
 
 # MTF controls
 FRACTION = 0.5           # 0.5 = MTF50 (what fraction of MTF to report)
@@ -53,6 +56,7 @@ TOGGLE_RUN_MTF = True    # True => run MTF on each patch; False => skip MTF (jus
 USE_EXISTING_CSV = False # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
+
 
 
 # ---------- helpers ----------
@@ -117,7 +121,7 @@ def process_image(rs_mtf, rs_hyp, src_path: Path, base_out: Path, TOGGLE_RUN_MTF
     arr = _read_gray01(src_path)
 
     # 2) detect slant-edge patch centers
-    ht = rs_hyp.HyperTarget(arr, plot_slant=False, plot_patches=False)
+    ht = rs_hyp.HyperTarget(arr, flens = LENS_FOCAL_LEN, fcoll = COLLIMATOR_FOCAL_LEN, sensor_pix_size = SENSOR_PIX_SIZE, plot_slant=False, plot_patches=False)
     centers = getattr(ht, "slant_ifieldsXY", None)
 
     # keep some metadata for sanity
@@ -252,6 +256,7 @@ def plot_mtf_vs_depth(df: pd.DataFrame, out_base: Path,
     plt.xlabel('Depth (µm)')
     plt.ylabel('MTF50 (cyc/pixel)')
     plt.title('MTF50 vs Depth')
+    plt.ylim(ymin=0)
     plt.grid(True, alpha=0.4)
     plt.tight_layout()
     plt.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
@@ -284,6 +289,7 @@ def violin_plot(
     ax.set_xticklabels([str(int(v)) for v in order if abs(float(v) % 20) < 1e-9], rotation=90)
     plt.title("MTF50 Distribution vs Depth")
     plt.tight_layout()
+    plt.ylim(ymin=0)
     plt.grid(True, alpha=0.4)
     plt.savefig(out_base / all_outfile, dpi=800, bbox_inches="tight")
     plt.close()
@@ -318,7 +324,7 @@ def violin_plot(
     plt.figure(figsize=(max(6, len(np.unique(d_zoom[depth_col]))/2), 8), dpi=200) # Dynamic width based on number of unique depths
     sns.violinplot(data=d_zoom, x=depth_col, y=mtf_col, order=order, cut=0)
     plt.axhline(top_median, ls="--", lw=1)
-    plt.ylim(y_lo, y_hi)
+    plt.ylim(ymin=0)
     plt.xticks(rotation=90 if (order and len(order) > 12) else 0)
     plt.grid(True,alpha=0.4)
     plt.title(f"Zoom near top median depth: {top_depth} (MTF50={top_median:.3f})")
@@ -363,7 +369,7 @@ def plot_mtf_vs_xy(df: pd.DataFrame, out_base: Path, depth_col: str = "depth_um"
     cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax, label='MTF50 (normalized)')
     fig.suptitle('MTF50 across Image Coordinates by Focal Stack Depth', y=0.98)
-    fig.tight_layout(rect=[0, 0, 0.9, 0.96])
+    # fig.tight_layout(rect=[0, 0, 0.9, 0.96])
     fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close(fig)
 
@@ -426,7 +432,7 @@ def tricontour_mtf_vs_xy(
     fig.colorbar(sm, cax=cax, label="MTF50")
 
     fig.suptitle("MTF50 across (x,y) by focal depth", y=0.99)
-    fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
+    # fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
     fig.savefig(out_base / outfile, dpi=800, bbox_inches="tight")
     plt.close(fig)
 
@@ -456,7 +462,7 @@ def tricontour_mtf_vs_xy(
         ax.axis('off')
 
     fig.suptitle("Delaunay Triangulation of All Points by Depth", y=0.99)
-    fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
+    # fig.tight_layout(rect=[0.0, 0.0, 0.90, 0.97])
     fig.savefig(out_base / outfile_delaunay, dpi=800, bbox_inches="tight")
     plt.close(fig)
 
@@ -511,7 +517,23 @@ def main():
     # Load modules only if we actually need to process images
     rs_mtf = _load_module_from_path(MTF_MODULE_PATH, required=("MTF",))
     rs_hyp = _load_module_from_path(HYPER_MODULE_PATH, required=("HyperTarget",))
-
+    
+    # rs_hyp = rs_hyp.HyperTarget.__init__(
+    #     self,
+    #     im_gray= arr,
+    #     nds = 16,
+    #     flens = LENS_FOCAL_LEN,
+    #     fcoll = COLLIMATOR_FOCAL_LEN,
+    #     target_square_npix = 1000,
+    #     target_pix_size = 15e-3,
+    #     sensor_pix_size = SENSOR_PIX_SIZE,
+    #     field_extent=[-1, 1, -1, 1],
+    #     plot_slant = False,
+    #     plot_text = False,
+    #     plot_flat = False,
+    #     plot_patches = False,
+    # )
+    
     files = _collect_images(in_path, FILENAME_GLOB)
     if not files:
         print(f"No files matched {FILENAME_GLOB!r} under: {in_path}")
@@ -529,7 +551,7 @@ def main():
             print(f"[ERROR] {Path(f).name}: {e}")
             traceback.print_exc()
 
-    # If True  and runs MTF to produce summary csv and plots only
+    # If True , bypasses hyper target , and runs MTF to produce summary csv and plots only
     if TOGGLE_RUN_MTF is True: 
         if all_rows:
             summary_csv = out_base / SUMMARY_CSV

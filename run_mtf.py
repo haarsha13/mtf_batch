@@ -25,7 +25,7 @@ plt.show = lambda *a, **k: None
 INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/test_image"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/220_Image"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_final_results"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
@@ -53,7 +53,7 @@ SUMMARY_CSV = "mtf_summary_all.csv"  # written into PATCH_OUT_BASE, and is the s
 
 # --- quick runner toggle ---
 TOGGLE_RUN_MTF = True    # True => run MTF on each patch; False => skip MTF (just save patches and metadata)
-USE_EXISTING_CSV = False # True => read CSV and only make plots; False => run full pipeline
+USE_EXISTING_CSV = True # True => read CSV and only make plots; False => run full pipeline
 CSV_OVERRIDE_PATH =  None # e.g. r"/path/to/mtf_summary_all.csv" (leave None to use PATCH_OUT_BASE/SUMMARY_CSV)
 # -------------- END CONFIG --------------------------
 

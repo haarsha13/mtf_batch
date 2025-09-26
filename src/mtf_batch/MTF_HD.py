@@ -107,9 +107,9 @@ class MTFReport:
 # --
 
 class Transform:
-
-  @staticmethod
-  def _raw_edge_angle_deg(arr01):
+  
+ @staticmethod
+ def _raw_edge_angle_deg(arr01):
 
     """
         Estimate the dominant edge angle (degrees) in an image by Canny-detecting
@@ -142,8 +142,8 @@ class Transform:
     return float(angle) 
 
 
-  @staticmethod
-  def _otsu_threshold01(gray: np.ndarray) -> float:
+ @staticmethod
+ def _otsu_threshold01(gray: np.ndarray) -> float:
       """
       Otsu threshold using scikit-image.
       Returns t in [0,1] if input is in [0,1].
@@ -169,8 +169,8 @@ class Transform:
       # Clip just in case of numeric edge cases
       return float(np.clip(t, 0.0, 1.0))
 
-  @staticmethod
-  def _michelson_contrast01(gray: np.ndarray) -> float:
+ @staticmethod
+ def _michelson_contrast01(gray: np.ndarray) -> float:
       """
       Estimate Michelson contrast: (Imax - Imin) / (Imax + Imin).
       Imin/Imax are means of pixels below/above the Otsu threshold.
@@ -203,8 +203,8 @@ class Transform:
       return float(np.clip(C, 0.0, 1.0))
 
     
-  @staticmethod
-  def LoadImg(file):
+ @staticmethod
+ def LoadImg(file):
 
     """
         Open an image with Pillow and return (PIL.Image gray, width, height).
@@ -219,8 +219,8 @@ class Transform:
         gsimg = img.convert('L') # converts to 8 bit pixels in greyscale    
     return gsimg, SHAPE_x, SHAPE_y 
 
-  @staticmethod
-  def Arrayify(img):
+ @staticmethod
+ def Arrayify(img):
 
     """
         Convert PIL image to float64 NumPy array normalized to [0,1].
@@ -233,15 +233,15 @@ class Transform:
       arr = np.asarray(img, dtype = np.double)/255 # also normalizing
     return arr # returns normalized array of img data
 
-  @staticmethod
-  def Imagify(Arr):
+ @staticmethod
+ def Imagify(Arr):
     """Convert a normalized [0,1] array back to an 8-bit grayscale PIL image."""
 
     img = Image.fromarray(Arr*255, mode='L')
     return img
 
-  @staticmethod
-  def Orientify(Arr):
+ @staticmethod
+ def Orientify(Arr):
 
     tl = np.average(Arr[0:2, 0:2])
     tr = np.average(Arr[0:2, -3:-1])
@@ -586,45 +586,11 @@ class MTF:
 
     # --- Final verbose plot with all steps ---
     if verticality > 0:
-        verticality = "Vertical"
-    else:
         verticality = "Horizontal"
+    else:
+        verticality = "Vertical"
 
     if (verbose == Verbosity.DETAIL):
-       
-        # MTF_lens = [] # The ghost of the theoretical lens MTF calculations attempt.
-        # FREQUENCY = []
-        # for i in range(len(mtf.y)):
-        #   pix_size = 3.2*10**(-3) #mm
-        #   x = mtf.x[i]
-        #   y = mtf.y[i]
-
-        #   f_nyq = (1/(2*pix_size)) #lp/mm
-        #   freqs = x/f_nyq
-        #   MTF_detec = float(np.abs(np.sinc(freqs)))
-
-        #   if MTF_detec < 1e-3:
-        #     MTF_detec = 1e-3 # to avoid division by zero
-          
-        #   MTF_sys = float(y)
-        #   lens = MTF_sys/MTF_detec
-        #   lens = np.clip(lens, 0, 1)
-          
-        #   MTF_lens.append(lens)
-        #   FREQUENCY.append(freqs)
-
-        # FREQUENCY = np.array(FREQUENCY) 
-        # MTF_lens = np.array(MTF_lens)
-
-        # fig1 = plt.figure(figsize=(6,4)) # new figure so it's not reusing gcf()
-        
-        # plt.plot(FREQUENCY, MTF_lens, label='Lens MTF', color='green')
-        # plt.xlabel("Spatial Frequency (cyc/pixel)")
-        # plt.ylabel("Theoretical Lens MTF")
-        # plt.title("Theoretical Lens MTF Curve")
-        # plt.grid(True, alpha=0.4)
-        # plt.close(fig1)
-
        
        plt.figure(figsize=(8,6))  # new figure so it's not reusing gcf()
 
@@ -636,7 +602,6 @@ class MTF:
        ax2 = plt.subplot(gs[1, 0])
        ax3 = plt.subplot(gs[2, 0])
        ax4 = plt.subplot(gs[:, 1])
-
 
        # Plot original image
        ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
@@ -654,6 +619,8 @@ class MTF:
        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
        ax2.xaxis.set_visible(True)
        ax2.yaxis.set_visible(True)
+       ax2.set_title(f"ESF (Width: {esf.width:0.3f} pixels, Threshold: {(esf.threshold*10):0.3f})")
+       ax2.set_xlabel('Pixels')
        ax2.grid(True)
        ax2.minorticks_on()
 
@@ -661,7 +628,10 @@ class MTF:
        ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
        ax3.xaxis.set_visible(True)
        ax3.yaxis.set_visible(True)
+       ax3.set_title(f"LSF (Kaiser Window $\\beta$ = {beta})")
+       ax3.set_xlabel('Pixels')
        ax3.grid(True)
+       ax3.set_ylim(0, 1.05)
        ax3.minorticks_on()
        ax3.legend(loc='upper right', fontsize=5)
 
@@ -671,9 +641,8 @@ class MTF:
        ax4.plot(0.5, mtf.mtfAtNyquist/100, 'o', color='red', linestyle='None', label='Nyquist Frequency', ms=3)
        ax4.plot(cutoff_freq, fraction, 'o', color='red', linestyle='None', label=f'MTF{fraction*100} Frequency', ms=3)
        ax4.text(0.5, 0.99, f"Angle: {esf.angle:0.3f} degrees", ha='left', va='top')
-       ax4.text(0.5, 0.94, f"Width: {esf.width:0.3f} pixels", ha='left', va='top')
-       ax4.text(0.5, 0.89, f"Threshold: {esf.threshold:0.3f}", ha='left', va='top')
-       ax4.text(0.5, 0.84, f"Contrast: {contrast*100:0.1f}%", ha='left', va='top')
+       ax4.text(0.5, 0.94, f"Contrast: {contrast*100:0.1f}%", ha='left', va='top')
+       ax4.set_ylim(0, 1.05)
        ax4.set_xlabel('Normalized Frequency')
        ax4.set_ylabel('MTF Value')
        ax4.minorticks_on()

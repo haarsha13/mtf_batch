@@ -409,7 +409,8 @@ class MTF:
     min = np.amin(esf_Values)
 
     # 10% thresholds define a wide bracket around the transition
-    threshold = (max - min) * 0.1
+    #threshold = (max - min) * 0.1
+    threshold = (max - min) * 1
 
     head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
     tail = np.amin(esf_Distances[(np.where(esf_Values > max - threshold))[0]])

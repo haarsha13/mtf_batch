@@ -140,7 +140,7 @@ The script will:
 ## License
 This repository is licensed under the [MIT License](./LICENSE). © 2025 Damian Howe and Haarsha Krishna Moorthy.
 
-## Third-Party Licenses
+## Third-Party License
 
 - **mtf.py** — License: MIT  
   Source: [<https://example.com/original-repo>](https://github.com/u-onder/mtf.py)  

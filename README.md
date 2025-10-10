@@ -141,7 +141,12 @@ The script will:
 This repository is licensed under the [MIT License](./LICENSE). © 2025 Damian Howe and Haarsha Krishna Moorthy.
 
 ## Third-Party Licenses
-License file: `third_party/licence.txt`
+
+- **mtf.py** — License: MIT  
+  Source: [<https://example.com/original-repo>](https://github.com/u-onder/mtf.py)  
+  Included under: `third_party/mtf.py`  
+  License file: `third_party/LICENSE.txt`
+
 
 ---
 

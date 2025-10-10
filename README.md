@@ -134,6 +134,15 @@ The script will:
 | source_image | x_pix | y_pix | image_w | image_h | edge_profile | angle_deg | width_px | threshold | contrast | mtf50_freq | mtf_at_nyquist |
 |--------------|------:|------:|--------:|--------:|--------------|----------:|---------:|----------:|---------:|-----------:|---------------:|
 
+
+---
+
+## License
+This repository is licensed under the [MIT License](./LICENSE). © 2025 Damian Howe and Haarsha Krishna Moorthy.
+
+## Third-Party Licenses
+License file: `third_party/licence.txt`
+
 ---
 
 ## Notes

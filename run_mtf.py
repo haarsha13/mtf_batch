@@ -22,14 +22,14 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/test_image"
+INPUT = "/path/to/images"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/outputs/SN006_final_results"
+PATCH_OUT_BASE = "/path/to/outputs"
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
-HYPER_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/third_party/hypertarget.py"
+MTF_MODULE_PATH = "/path/to/MTF_HD.py"
+HYPER_MODULE_PATH = "/path/to/hypertarget.py"
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"

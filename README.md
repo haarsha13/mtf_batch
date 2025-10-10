@@ -65,14 +65,14 @@ Open **`run_mtf.py`** and edit the config block at the top:
 
 ```python
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = ""
+INPUT = "/path/to/images"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = ""
+PATCH_OUT_BASE = "/path/to/outputs"
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = "dir\\MTF_HD.py"
-HYPER_MODULE_PATH = "dir\\hypertarget.py"
+MTF_MODULE_PATH = "/path/to/MTF_HD.py"
+HYPER_MODULE_PATH = "/path/to/hypertarget.py"
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"

@@ -409,8 +409,8 @@ class MTF:
     min = np.amin(esf_Values)
 
     # 10% thresholds define a wide bracket around the transition
-    threshold = (max - min) * 0.1
-     
+    threshold = 0.1 * (vmax - vmin)
+
     head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
     tail = np.amin(esf_Distances[(np.where(esf_Values > max - threshold))[0]])
 
@@ -604,7 +604,8 @@ class MTF:
        ax1.imshow(imgArr_orig, cmap='gray', vmin=0.0, vmax=1.0)
        ax1.plot(x, y, color='red', label = 'Edge After Orientation')
        ax1.axis('off')
-       ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {verticality}")
+       edge_profile = "Horizontal" if abs(esf.angle) < 45 else "Vertical"
+       ax1.set_title(f"Image Dimensions: {w} by {h}\n Edge Profile: {edge_profile}")
        ax1.legend(loc='lower left', fontsize=5)
 
        # Plot raw and smoothed ESF
@@ -665,7 +666,7 @@ class MTF:
     mtf, cutoff_freq, _, _ = MTF.GetMTF(lsf, fraction, Verbosity.NONE, beta=beta)
 
     # --- Package results ---
-    edge_profile = "Vertical" if verticality > 0 else "Horizontal"
+    edge_profile = "Horizontal" if abs(esf.angle) < 45 else "Vertical"
     mtf_at_nyquist = float(mtf.mtfAtNyquist) / 100.0  # your code reports %; convert to 0..1
 
     return MTFReport(

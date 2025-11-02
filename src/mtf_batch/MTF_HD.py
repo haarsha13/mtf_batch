@@ -405,21 +405,18 @@ class MTF:
     esf_Values = esf.y
     esf_Distances = esf.x
 
-    max = np.amax(esf_Values)
-    min = np.amin(esf_Values)
+   # Replace the min/max & threshold block with this:
+    vmax = float(np.max(esf_Values))
+    vmin = float(np.min(esf_Values))
+    threshold = 0.1 * (vmax - vmin)          # 10% band around the transition
 
-    # 10% thresholds define a wide bracket around the transition
-    threshold = 0.1 * (vmax - vmin)
+    head = np.max(esf_Distances[esf_Values < (vmin + threshold)])
+    tail = np.min(esf_Distances[esf_Values > (vmax - threshold)])
+    width = abs(head - tail)
 
-    head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
-    tail = np.amin(esf_Distances[(np.where(esf_Values > max - threshold))[0]])
-
-    width = abs(head-tail)
-
-    # Crop the ESF to a region slightly larger than the detected transition
-    # (20% margin on each side)
+    # keep the crop exactly as you have it:
     esfRaw = MTF.crop(esf_Values, esf_Distances, head - 1.2*width, tail + 1.2*width)
-
+    
     # --- Smooth & uniformly re-sample the ESF with a cubic spline ---
     # Knots are placed at quantiles of the raw ESF x-axis to get better
     # coverage of the transition region (vs. uniform spacing)

@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-from csqa import logging
+import logging
 
 import cv2
 import matplotlib.pyplot as plt

@@ -409,9 +409,8 @@ class MTF:
     min = np.amin(esf_Values)
 
     # 10% thresholds define a wide bracket around the transition
-    #threshold = (max - min) * 0.1
-    threshold = (max - min) * 1
-
+    threshold = (max - min) * 0.1
+     
     head = np.amax(esf_Distances[(np.where(esf_Values < min + threshold))[0]])
     tail = np.amin(esf_Distances[(np.where(esf_Values > max - threshold))[0]])
 
@@ -586,10 +585,7 @@ class MTF:
     mtf, cutoff_freq, windowed_y , window = MTF.GetMTF(lsf, fraction, Verbosity.DETAIL, beta=beta)  # see MTF plot
 
     # --- Final verbose plot with all steps ---
-    if verticality > 0:
-        verticality = "Horizontal"
-    else:
-        verticality = "Vertical"
+    verticality = "Vertical" if verticality > 0 else "Horizontal"
 
     if (verbose == Verbosity.DETAIL):
        

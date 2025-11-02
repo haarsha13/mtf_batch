@@ -65,14 +65,14 @@ Open **`run_mtf.py`** and edit the config block at the top:
 
 ```python
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = ""
+INPUT = "/path/to/images"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = ""
+PATCH_OUT_BASE = "/path/to/outputs"
 
 # Your local paths to the MTF and HyperTarget modules:
-MTF_MODULE_PATH = "dir\\MTF_HD.py"
-HYPER_MODULE_PATH = "dir\\hypertarget.py"
+MTF_MODULE_PATH = "/path/to/MTF_HD.py"
+HYPER_MODULE_PATH = "/path/to/hypertarget.py"
 
 # Uploaded images must be in .PNG format
 FILENAME_GLOB = "*.png"
@@ -133,6 +133,20 @@ The script will:
 
 | source_image | x_pix | y_pix | image_w | image_h | edge_profile | angle_deg | width_px | threshold | contrast | mtf50_freq | mtf_at_nyquist |
 |--------------|------:|------:|--------:|--------:|--------------|----------:|---------:|----------:|---------:|-----------:|---------------:|
+
+
+---
+
+## License
+This repository is licensed under the [MIT License](./LICENSE). © 2025 Damian Howe and Haarsha Krishna Moorthy.
+
+## Third-Party License
+
+- **mtf.py** — License: MIT  
+  Source: [<https://example.com/original-repo>](https://github.com/u-onder/mtf.py)  
+  Included under: `third_party/mtf.py`  
+  License file: `third_party/LICENSE.txt`
+
 
 ---
 

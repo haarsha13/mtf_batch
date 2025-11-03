@@ -383,77 +383,111 @@ class MTF:
     return cSet(distances, values)
 
   @staticmethod
-  def GetESF_crop(Arr, verbose = Verbosity.NONE):
-    """Detect edge, fit line, build & crop ESF around the transition region."""
-      
-    imgArr, verticality = Transform.Orientify(Arr)
-    edgeImg = cv2.Canny(np.uint8(imgArr*255), 40, 90, L2gradient = True)
+  def GetESF_crop(Arr, verbose=Verbosity.NONE):
+      """
+      Detect edge, fit line, build & crop ESF around the transition region.
+      - Keeps Arr orientation as-is (no Orientify).
+      - Flips horizontally only to canonicalize ESF polarity if angle>0.
+      - Crops ESF to ~10%..90% band with padding.
+      - Smooths ESF with a cubic spline (auto smoothing) and re-samples uniformly.
+      Returns:
+          cESF(raw_centered, interp_centered, threshold, width, angle_deg, edgePoly)
+      """
+      # --- Input normalization & edge detection ---
+      imgArr = np.asarray(Arr, dtype=float)
+      if imgArr.max() > 1.0:
+          imgArr = imgArr / 255.0
+      imgArr = np.clip(imgArr, 0.0, 1.0)
 
-    line = np.argwhere(edgeImg == 255)
-    edgePoly = np.polyfit(line[:,1], line[:,0], 1)
-    angle = math.degrees(math.atan(-edgePoly[0]))
+      edgeImg = cv2.Canny((imgArr*255).astype(np.uint8), 40, 90, L2gradient=True)
+      line = np.argwhere(edgeImg == 255)
+      if line.size < 2:
+          raise ValueError("GetESF_crop: not enough edge pixels detected for a reliable fit.")
 
-     # Flip horizontally if the edge angle is positive (canonicalize sign)
-    finalEdgePoly = edgePoly.copy()
-    if angle>0:
-      imgArr = np.flip(imgArr, axis = 1)
-      finalEdgePoly[1] = np.polyval(edgePoly, np.size(imgArr, 1)-1)
-      finalEdgePoly[0] = -edgePoly[0]
+      # --- Fit line y = m*x + b, compute angle (deg) wrt horizontal ---
+      edgePoly = np.polyfit(line[:, 1], line[:, 0], 1)  # [m, b] in image coords
+      angle = math.degrees(math.atan(-edgePoly[0]))
 
-    esf = MTF.GetESF(imgArr, finalEdgePoly, Verbosity.BRIEF)
+      # --- Canonicalize ESF polarity: flip horizontally if angle > 0 ---
+      finalEdgePoly = edgePoly.copy()
+      if angle > 0.0:
+          img_w = imgArr.shape[1]
+          imgArr = np.flip(imgArr, axis=1)
+          # After x' = (img_w-1 - x), slope m' = -m; intercept b' = m*(img_w-1) + b
+          finalEdgePoly[0] = -edgePoly[0]
+          finalEdgePoly[1] = edgePoly[0]*(img_w - 1) + edgePoly[1]
 
-    esf_Values = esf.y
-    esf_Distances = esf.x
+      # --- Build raw ESF (sorted distances; ESF rises dark→bright) ---
+      esf = MTF.GetESF(imgArr, finalEdgePoly, Verbosity.BRIEF)
+      esf_Values = esf.y
+      esf_Distances = esf.x
 
-   # Replace the min/max & threshold block with this:
-    vmax = float(np.max(esf_Values))
-    vmin = float(np.min(esf_Values))
-    threshold = 0.1 * (vmax - vmin)          # 10% band around the transition
+      # --- Crop to the transition band using a 10% amplitude margin ---
+      # Use robust min/max in case of tiny outliers
+      vmin = float(np.min(esf_Values))
+      vmax = float(np.max(esf_Values))
+      amp = vmax - vmin
+      if amp <= 1e-9:
+          raise ValueError("GetESF_crop: ESF amplitude is ~0; cannot crop transition.")
 
-    head = np.max(esf_Distances[esf_Values < (vmin + threshold)])
-    tail = np.min(esf_Distances[esf_Values > (vmax - threshold)])
-    width = abs(head - tail)
+      threshold = 0.10 * amp  # 10% band
+      # Guard: masks can be empty if the ESF is pathological; fall back to percentiles
+      low_mask = np.where(esf_Values < (vmin + threshold))[0]
+      high_mask = np.where(esf_Values > (vmax - threshold))[0]
+      if low_mask.size == 0:
+          head = float(np.quantile(esf_Distances, 0.25))
+      else:
+          head = float(np.max(esf_Distances[low_mask]))
+      if high_mask.size == 0:
+          tail = float(np.quantile(esf_Distances, 0.75))
+      else:
+          tail = float(np.min(esf_Distances[high_mask]))
 
-    # keep the crop exactly as you have it:
-    esfRaw = MTF.crop(esf_Values, esf_Distances, head - 1.2*width, tail + 1.2*width)
-    
-    # --- Smooth & uniformly re-sample the ESF with a cubic spline ---
-    # Knots are placed at quantiles of the raw ESF x-axis to get better
-    # coverage of the transition region (vs. uniform spacing)
-    qs = np.linspace(0,1,20)[1:-1]
-    knots = np.quantile(esfRaw.x, qs)
-    tck = interpolate.splrep(esfRaw.x, esfRaw.y, t=knots, k=3)
-    ysmooth = interpolate.splev(esfRaw.x, tck)
+      width = abs(tail - head)
+      if width <= 1e-9:
+          # Extremely sharp/noisy case; expand a little
+          width = max(1.0, abs(esf_Distances[-1] - esf_Distances[0]) * 0.1)
 
-    InterpDistances = np.linspace(esfRaw.x[0], esfRaw.x[-1], 500)
-    InterpValues = np.interp(InterpDistances, esfRaw.x, ysmooth)
+      # Pad the crop (~20% beyond both sides)
+      pad = 1.2 * width
+      esfRaw = MTF.crop(esf_Values, esf_Distances, head - pad, tail + pad)
 
-    esfInterp = cSet(InterpDistances, InterpValues)
+      # --- Smooth & uniformly re-sample ESF (robust cubic spline) ---
+      # Deduplicate any repeated x for spline stability
+      xu, idx = np.unique(esfRaw.x, return_index=True)
+      yu = esfRaw.y[idx]
+      if xu.size < 8:
+          # Not enough points for a good spline; fall back to linear interpolation
+          InterpDistances = np.linspace(xu[0], xu[-1], 500)
+          InterpValues = np.interp(InterpDistances, xu, yu)
+      else:
+          # Use small smoothing to suppress noise but keep edge shape
+          tck = interpolate.splrep(xu, yu, k=3, s=0.001*len(xu))
+          InterpDistances = np.linspace(xu[0], xu[-1], 500)
+          InterpValues = interpolate.splev(InterpDistances, tck)
 
-    # --- NEW: center both raw & interp ESF at the 50% level ---
-    esfRaw_c, esfInterp_c, x_edge = MTF.Center_ESF(esfRaw, esfInterp, verbose=verbose)
+      esfInterp = cSet(InterpDistances, InterpValues)
 
-    if (verbose == Verbosity.BRIEF):
-        print(f"ESF Crop [done] (Distance from {esfRaw_c.x[0]:2.2f} to {esfRaw_c.x[-1]:2.2f})")
+      # --- Center both raw & interp ESF at the 50% level (x=0 at half amplitude) ---
+      esfRaw_c, esfInterp_c, x_edge = MTF.Center_ESF(cSet(xu, yu), esfInterp, verbose=verbose)
 
-    elif (verbose == Verbosity.DETAIL):
-        x = [0, np.size(imgArr,1)-1]
-        y = np.polyval(finalEdgePoly, x)
+      if verbose == Verbosity.BRIEF:
+          print(f"ESF Crop [done] (Distance from {esfRaw_c.x[0]:.2f} to {esfRaw_c.x[-1]:.2f})")
+      elif verbose == Verbosity.DETAIL:
+          xline = [0, imgArr.shape[1]-1]
+          yline = np.polyval(finalEdgePoly, xline)
+          fig = pylab.gcf()
+          fig.canvas.manager.set_window_title('ESF Crop (centered)')
+          (ax1, ax2) = plt.subplots(2)
+          ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
+          ax1.plot(xline, yline, color='red')
+          ax2.plot(esfRaw_c.x, esfRaw_c.y, label='Raw (centered)')
+          ax2.plot(esfInterp_c.x, esfInterp_c.y, label='Smooth (centered)')
+          ax2.axvline(0.0, linestyle='--')
+          ax2.legend()
+          plt.show(block=False); plt.show()
 
-        fig = pylab.gcf()
-        fig.canvas.manager.set_window_title('ESF Crop (centered)')
-        (ax1, ax2) = plt.subplots(2)
-        ax1.imshow(imgArr, cmap='gray', vmin=0.0, vmax=1.0)
-        ax1.plot(x, y, color='red')
-        ax2.plot(esfRaw_c.x, esfRaw_c.y, label='Raw (centered)')
-        ax2.plot(esfInterp_c.x, esfInterp_c.y, label='Smooth (centered)')
-        ax2.axvline(0.0, linestyle='--')
-        ax2.legend()
-        plt.show(block=False)
-        plt.show()
-
-
-    return cESF(esfRaw_c, esfInterp_c, threshold, width, angle, edgePoly)
+      return cESF(esfRaw_c, esfInterp_c, float(threshold), float(width), float(angle), edgePoly)
 
 
   @staticmethod
@@ -606,10 +640,15 @@ class MTF:
        ax1.legend(loc='lower left', fontsize=5)
 
        # Plot raw and smoothed ESF
+
+
        ax2.plot(esf.rawESF.x, esf.rawESF.y,
                 esf.interpESF.x, esf.interpESF.y)
-       top = np.max(esf.rawESF.y)-esf.threshold
-       bot = np.min(esf.rawESF.y)+esf.threshold
+       vmax = float(np.max(esf.rawESF.y))
+       vmin = float(np.min(esf.rawESF.y))
+       thr_band = 0.10 * (vmax - vmin)   # 10% of ESF amplitud
+       top = vmax - thr_band
+       bot = vmin + thr_band
        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [top, top], color='red')
        ax2.plot([esf.rawESF.x[0], esf.rawESF.x[-1]], [bot, bot], color='red')
        ax2.xaxis.set_visible(True)
@@ -619,6 +658,7 @@ class MTF:
        ax2.grid(True)
        ax2.minorticks_on()
 
+    
        # Plot windowed LSF
        ax3.plot(lsf.x, windowed_y, label='LSF', alpha = 0.7)
        ax3.xaxis.set_visible(True)

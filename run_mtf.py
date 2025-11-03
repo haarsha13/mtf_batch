@@ -22,10 +22,10 @@ plt.show = lambda *a, **k: None
 
 # ---------------- CONFIG (EDIT THESE) ----------------
 # The folder that contains images to be sliced, ... subfolders:
-INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_70um"
+INPUT = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus_SN006"
 
 # Where to write patches and results:
-PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/PHYS3810/SN010_70um_results"
+PATCH_OUT_BASE = r"/Users/haarshakrishna/Documents/PHYS3810/ThroughFocus_SN006_results"
 
 # Your local paths to the MTF and HyperTarget modules:
 MTF_MODULE_PATH = r"/Users/haarshakrishna/Documents/GitHub/mtf_batch/src/mtf_batch/MTF_HD.py"
